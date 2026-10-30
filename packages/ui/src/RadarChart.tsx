@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useAtmosphere, getRgba } from '../context/ThemeAtmosphereContext';
-import { soundFx } from '../utils/soundEngine';
+import { soundFx } from './soundEngine';
 
 interface RadarChartProps {
   data: {
@@ -19,6 +18,7 @@ interface RadarChartProps {
   };
   size?: number;
   showComparison?: boolean;
+  customColor?: string;
 }
 
 export const RadarChart: React.FC<RadarChartProps> = ({
@@ -31,9 +31,9 @@ export const RadarChart: React.FC<RadarChartProps> = ({
     teamwork: 74
   },
   size = 280,
-  showComparison = true
+  showComparison = true,
+  customColor = '#10b981'
 }) => {
-  const { customColor } = useAtmosphere();
   const [activeStat, setActiveStat] = useState<string | null>(null);
 
   const attributes = [
@@ -216,7 +216,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({
             const ly = center + labelRadius * Math.sin(angle);
             const isHovered = activeStat === attr.key;
 
-            let textAnchor = 'middle';
+            let textAnchor: 'middle' | 'start' | 'end' = 'middle';
             if (Math.cos(angle) > 0.3) textAnchor = 'start';
             else if (Math.cos(angle) < -0.3) textAnchor = 'end';
 
@@ -270,3 +270,5 @@ export const RadarChart: React.FC<RadarChartProps> = ({
     </div>
   );
 };
+
+export default RadarChart;

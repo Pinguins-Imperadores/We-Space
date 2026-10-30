@@ -37,3 +37,34 @@ impl AudioTriggerDetector {
         db >= self.rms_threshold_db
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_rms_db_silence() {
+        let samples = [0.0f32; 100];
+        let db = AudioTriggerDetector::calculate_rms_db(&samples);
+        assert_eq!(db, -100.0);
+    }
+
+    #[test]
+    fn test_calculate_rms_db_empty() {
+        let samples: [f32; 0] = [];
+        let db = AudioTriggerDetector::calculate_rms_db(&samples);
+        assert_eq!(db, -100.0);
+    }
+
+    #[test]
+    fn test_audio_spike_detection() {
+        let detector = AudioTriggerDetector::new(-6.0);
+        // Full amplitude sine/square wave (rms = 1.0 -> 0 dB)
+        let loud_samples = [1.0f32; 50];
+        assert!(detector.is_spike(&loud_samples));
+
+        // Low volume (rms = 0.05 -> ~ -26 dB)
+        let quiet_samples = [0.05f32; 50];
+        assert!(!detector.is_spike(&quiet_samples));
+    }
+}

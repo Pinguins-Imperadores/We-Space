@@ -1,3 +1,5 @@
+#![allow(clippy::chunks_exact_to_as_chunks, clippy::explicit_counter_loop)]
+
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 

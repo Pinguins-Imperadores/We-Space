@@ -23,6 +23,7 @@ uuid = { version = "1.8", features = ["v4", "serde"] }
 sha2 = "0.10"
 hmac = "0.12"
 ring = "0.17"
+hex = "0.4"
 keyring = "2.1"
 thiserror = "1.0"
 tracing = "0.1"

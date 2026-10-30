@@ -46,40 +46,66 @@ impl NativeCapturePipeline {
         }
     }
 
-    /// Detects the available GPU hardware encoder on the user's Windows system.
+    /// Detects the available GPU hardware encoder on the user's system.
     pub fn detect_hardware_encoder() -> HardwareEncoder {
-        // In production Windows build, queries DXGI / D3D11 adapter.
-        HardwareEncoder::NvidiaNvenc
+        #[cfg(target_os = "windows")]
+        {
+            // In production Windows build, queries DXGI / D3D11 adapter.
+            HardwareEncoder::NvidiaNvenc
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            HardwareEncoder::SoftwareFallback
+        }
     }
 
-    /// Constructs the GStreamer pipeline string for zero-copy Direct3D11 capture.
+    /// Constructs the GStreamer pipeline string for zero-copy Direct3D11 capture on Windows,
+    /// or a live mock pipeline for non-Windows platforms.
     pub fn build_gst_pipeline_string(&self, hwnd: usize, encoder: &HardwareEncoder) -> String {
-        let encoder_elem = match encoder {
-            HardwareEncoder::NvidiaNvenc => {
-                "nvh264enc preset=low-latency-hq rc-mode=cbr bitrate=12000 gop-size=60 bframes=0 zerolatency=true"
-            }
-            HardwareEncoder::AmdAmf => {
-                "amfh264enc usage=lowlatency rate-control=cbr bitrate=12000 gop-size=60 b-frames=0"
-            }
-            HardwareEncoder::IntelQsv => {
-                "qsvh264enc rate-control=cbr bitrate=12000 gop-size=60"
-            }
-            HardwareEncoder::SoftwareFallback => {
-                "x264enc speed-preset=ultrafast tune=zerolatency bitrate=8000 key-int-max=60"
-            }
-        };
+        #[cfg(target_os = "windows")]
+        {
+            let encoder_elem = match encoder {
+                HardwareEncoder::NvidiaNvenc => {
+                    "nvh264enc preset=low-latency-hq rc-mode=cbr bitrate=12000 gop-size=60 bframes=0 zerolatency=true"
+                }
+                HardwareEncoder::AmdAmf => {
+                    "amfh264enc usage=lowlatency rate-control=cbr bitrate=12000 gop-size=60 b-frames=0"
+                }
+                HardwareEncoder::IntelQsv => {
+                    "qsvh264enc rate-control=cbr bitrate=12000 gop-size=60"
+                }
+                HardwareEncoder::SoftwareFallback => {
+                    "x264enc speed-preset=ultrafast tune=zerolatency bitrate=8000 key-int-max=60"
+                }
+            };
 
-        format!(
-            "d3d11screencapturesrc window-handle={} show-cursor=false ! \
-             video/x-raw(memory:D3D11Memory),framerate={}/1 ! \
-             d3d11convert ! \
-             d3d11scale ! \
-             video/x-raw(memory:D3D11Memory),width={},height={},format=NV12 ! \
-             {} ! \
-             h264parse config-interval=-1 ! \
-             appsink name=gop_sink emit-signals=true sync=false max-buffers=120 drop=true",
-            hwnd, self.config.target_fps, self.config.width, self.config.height, encoder_elem
-        )
+            format!(
+                "d3d11screencapturesrc window-handle={} show-cursor=false ! \
+                 video/x-raw(memory:D3D11Memory),framerate={}/1 ! \
+                 d3d11convert ! \
+                 d3d11scale ! \
+                 video/x-raw(memory:D3D11Memory),width={},height={},format=NV12 ! \
+                 {} ! \
+                 h264parse config-interval=-1 ! \
+                 appsink name=gop_sink emit-signals=true sync=false max-buffers=120 drop=true",
+                hwnd, self.config.target_fps, self.config.width, self.config.height, encoder_elem
+            )
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (hwnd, encoder);
+            format!(
+                "videotestsrc is-live=true ! \
+                 video/x-raw,framerate={}/1,width={},height={} ! \
+                 x264enc speed-preset=ultrafast tune=zerolatency bitrate={} key-int-max=60 ! \
+                 h264parse config-interval=-1 ! \
+                 appsink name=gop_sink emit-signals=true sync=false max-buffers=120 drop=true",
+                self.config.target_fps,
+                self.config.width,
+                self.config.height,
+                self.config.bitrate_kbps
+            )
+        }
     }
 
     pub fn start(&self) {

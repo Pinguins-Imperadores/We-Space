@@ -11,13 +11,19 @@ COPY crates/api-server/Cargo.toml crates/api-server/
 COPY crates/shared-types/Cargo.toml crates/shared-types/
 COPY apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/
 
-# Copy sources
+# Provide minimal stubs for desktop member so headless Alpine builds the API binary cleanly
+RUN mkdir -p apps/desktop/src-tauri/src && \
+    echo "pub fn run() {}" > apps/desktop/src-tauri/src/lib.rs && \
+    echo "fn main() {}" > apps/desktop/src-tauri/src/main.rs && \
+    echo "fn main() {}" > apps/desktop/src-tauri/build.rs
+
+# Copy server and shared sources
 COPY crates/shared-types crates/shared-types
 COPY crates/api-server crates/api-server
 COPY docs/keys docs/keys
 
-WORKDIR /app/crates/api-server
-RUN cargo build --release
+# Build the release binary explicitly for wespace-api
+RUN cargo build --release --bin wespace-api
 
 # Runner Image
 FROM alpine:3.20
