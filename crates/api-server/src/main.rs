@@ -154,6 +154,10 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .nest("/api/v1", api_routes)
         .layer(cors)
+        .layer(axum::middleware::from_fn(
+            crate::middleware::security_headers_middleware,
+        ))
+        .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

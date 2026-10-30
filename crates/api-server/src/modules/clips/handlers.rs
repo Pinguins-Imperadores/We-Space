@@ -1,15 +1,17 @@
 use crate::state::AppState;
 use axum::{
-    extract::{Query, State},
+    extract::{Extension, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use serde::Deserialize;
+use shared_types::auth::TokenClaims;
 use shared_types::clips::{
     ClipResponse, ClipStatus, CreateClipIntentRequest, PresignedUploadResponse,
 };
 use shared_types::lfg::GameTitle;
+use shared_types::sanitize::sanitize_clip_title;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -21,10 +23,27 @@ pub struct FeedQuery {
 
 pub async fn create_clip_intent(
     State(state): State<AppState>,
+    claims: Option<Extension<TokenClaims>>,
     Json(payload): Json<CreateClipIntentRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    // IDOR Protection: Extract author_id from validated JWT claims if present
+    let author_id = claims.map(|c| c.0.sub).unwrap_or_else(Uuid::new_v4);
+
+    // Strict input sanitization (XSS, control chars, trim)
+    let clean_title = match sanitize_clip_title(&payload.title) {
+        Ok(t) => t,
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "INVALID_TITLE",
+                    "message": e
+                })),
+            ));
+        }
+    };
+
     let clip_id = Uuid::new_v4();
-    let author_id = Uuid::new_v4(); // In protected route, extracted from TokenClaims
     let object_key = format!("clips/{}/{}.mp4", author_id, clip_id);
 
     let (upload_url, required_headers) = state.r2.generate_presigned_put_url(
@@ -56,7 +75,7 @@ pub async fn create_clip_intent(
     .bind(clip_id)
     .bind(author_id)
     .bind(game_str)
-    .bind(&payload.title)
+    .bind(&clean_title)
     .bind(&object_key)
     .bind(&payload.file_sha256)
     .bind(&payload.stego_watermark_hash)

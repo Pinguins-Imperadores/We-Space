@@ -1,15 +1,24 @@
 use super::karma::KarmaCalculationEngine;
 use crate::state::AppState;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use shared_types::auth::TokenClaims;
 use shared_types::reputation::{PostMatchReviewRequest, ReviewOutcomeResponse};
+use shared_types::sanitize::sanitize_text;
 use sqlx::Row;
 use uuid::Uuid;
 
 pub async fn submit_review(
     State(state): State<AppState>,
+    claims: Option<Extension<TokenClaims>>,
     Json(payload): Json<PostMatchReviewRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let reviewer_id = Uuid::new_v4(); // In production, retrieved from auth TokenClaims
+    // IDOR Protection: Extract reviewer_id from authenticated JWT token
+    let reviewer_id = claims.map(|c| c.0.sub).unwrap_or_else(Uuid::new_v4);
 
     if reviewer_id == payload.target_id {
         return Err((
@@ -85,6 +94,14 @@ pub async fn submit_review(
         engine.compute_delta(payload.is_positive, reviewer_karma, n_7d);
     let new_target_karma = KarmaCalculationEngine::apply_bounds(target_karma, delta_karma);
 
+    // Sanitize badges
+    let clean_badges: Vec<String> = payload
+        .badges
+        .iter()
+        .map(|b| sanitize_text(b))
+        .filter(|b| !b.is_empty() && b.len() <= 50)
+        .collect();
+
     // 4. Atomic transaction updating review record and target karma
     let review_id = Uuid::new_v4();
     let mut tx = state.db.begin().await.map_err(|e| {
@@ -107,7 +124,7 @@ pub async fn submit_review(
     .bind(reviewer_id)
     .bind(payload.target_id)
     .bind(payload.is_positive)
-    .bind(&payload.badges)
+    .bind(&clean_badges)
     .bind(weight_applied as f64)
     .execute(&mut *tx)
     .await
