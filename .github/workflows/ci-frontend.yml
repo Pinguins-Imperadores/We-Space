@@ -1,0 +1,43 @@
+name: CI Frontend (React & TypeScript)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ci-frontend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Shared Packages
+        run: |
+          npm run build -w packages/ui
+          npm run build -w packages/api-client
+
+      - name: Build Desktop Application
+        run: npm run build:desktop
+
+      - name: Build Web PWA Application
+        run: npm run build:web
