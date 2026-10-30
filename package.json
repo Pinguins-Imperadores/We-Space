@@ -17,6 +17,6 @@
     "docker:down": "docker compose -f infra/docker/docker-compose.dev.yml down"
   },
   "devDependencies": {
-    "typescript": "~5.8.2"
+    "typescript": "~7.0.2"
   }
 }
