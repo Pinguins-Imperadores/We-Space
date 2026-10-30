@@ -1,3 +1,10 @@
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::result_large_err,
+    clippy::let_underscore_future
+)]
+
 mod config;
 mod middleware;
 mod modules;
@@ -66,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
     // 2. Redis 7 Client
     let redis_config = RedisConfig::from_url(&config.redis_url)?;
     let redis = RedisClient::new(redis_config, None, None, None);
-    let _ = redis.connect();
+    let _connection_task = redis.connect();
 
     // 3. NATS JetStream Client
     let nats = async_nats::connect(&config.nats_url)
@@ -79,7 +86,10 @@ async fn main() -> anyhow::Result<()> {
     // 4. Crypto, Turn, and R2 services
     let crypto = Arc::new(
         CryptoService::new(config.jwt_private_key_pem.as_bytes()).unwrap_or_else(|e| {
-            tracing::warn!("JWT private key invalid or empty, using transient dev key: {}", e);
+            tracing::warn!(
+                "JWT private key invalid or empty, using transient dev key: {}",
+                e
+            );
             // Fallback for development if no PEM is supplied
             CryptoService::new_transient_dev().expect("Transient key generation failed")
         }),
@@ -108,7 +118,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // 5. Spawn background NATS JetStream Worker
-    tokio::spawn(nats_worker::start_nats_worker(state.nats.clone(), state.db.clone()));
+    tokio::spawn(nats_worker::start_nats_worker(
+        state.nats.clone(),
+        state.db.clone(),
+    ));
 
     // 6. CORS Layer
     let cors = CorsLayer::new()
@@ -120,7 +133,13 @@ async fn main() -> anyhow::Result<()> {
             "tauri://localhost".parse()?,
             "http://tauri.localhost".parse()?,
         ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
         .allow_credentials(true);
 

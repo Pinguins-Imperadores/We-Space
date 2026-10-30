@@ -1,3 +1,4 @@
+use crate::state::AppState;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -5,8 +6,7 @@ use axum::{
     },
     response::IntoResponse,
 };
-use crate::state::AppState;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use uuid::Uuid;
 
 pub async fn ws_lobby_handler(
@@ -25,7 +25,11 @@ async fn handle_socket(socket: WebSocket, lobby_id: Uuid, state: AppState) {
     let mut nats_sub = match state.nats.subscribe(channel_name.clone()).await {
         Ok(sub) => sub,
         Err(e) => {
-            tracing::error!("Failed to subscribe to NATS channel {}: {}", channel_name, e);
+            tracing::error!(
+                "Failed to subscribe to NATS channel {}: {}",
+                channel_name,
+                e
+            );
             return;
         }
     };

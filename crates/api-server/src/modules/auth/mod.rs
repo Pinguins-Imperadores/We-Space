@@ -3,8 +3,8 @@ pub mod handlers;
 
 pub use crypto::CryptoService;
 
-use axum::{routing::post, Router};
 use crate::state::AppState;
+use axum::{routing::post, Router};
 
 pub fn auth_routes() -> Router<AppState> {
     Router::new()

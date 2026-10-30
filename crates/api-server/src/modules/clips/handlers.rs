@@ -6,8 +6,11 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use shared_types::clips::{ClipResponse, ClipStatus, CreateClipIntentRequest, PresignedUploadResponse};
+use shared_types::clips::{
+    ClipResponse, ClipStatus, CreateClipIntentRequest, PresignedUploadResponse,
+};
 use shared_types::lfg::GameTitle;
+use sqlx::Row;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -36,7 +39,7 @@ pub async fn create_clip_intent(
         GameTitle::Lol => "LOL",
     };
 
-    let res = sqlx::query!(
+    let res = sqlx::query(
         r#"
         INSERT INTO clips (
             id, author_id, game, title, status, r2_object_key,
@@ -49,17 +52,17 @@ pub async fn create_clip_intent(
         )
         RETURNING id
         "#,
-        clip_id,
-        author_id,
-        game_str as _,
-        payload.title,
-        object_key,
-        payload.file_sha256,
-        payload.stego_watermark_hash,
-        payload.gpu_encoder_fingerprint,
-        payload.trigger_telemetry,
-        payload.duration_ms as i32
     )
+    .bind(clip_id)
+    .bind(author_id)
+    .bind(game_str)
+    .bind(&payload.title)
+    .bind(&object_key)
+    .bind(&payload.file_sha256)
+    .bind(&payload.stego_watermark_hash)
+    .bind(&payload.gpu_encoder_fingerprint)
+    .bind(&payload.trigger_telemetry)
+    .bind(payload.duration_ms as i32)
     .fetch_one(&state.db)
     .await;
 
@@ -89,15 +92,15 @@ pub async fn get_feed(
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let limit = query.limit.unwrap_or(20).min(50);
 
-    let rows = sqlx::query!(
+    let rows = sqlx::query(
         r#"
         SELECT 
             c.id,
             c.author_id,
             u.username as author_username,
-            c.game as "game: String",
+            c.game::text as game,
             c.title,
-            c.status as "status: String",
+            c.status::text as status,
             c.r2_object_key,
             c.file_sha256,
             c.trigger_telemetry,
@@ -109,8 +112,8 @@ pub async fn get_feed(
         ORDER BY c.created_at DESC
         LIMIT $1
         "#,
-        limit
     )
+    .bind(limit)
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
@@ -122,22 +125,27 @@ pub async fn get_feed(
 
     let feed: Vec<ClipResponse> = rows
         .into_iter()
-        .map(|r| ClipResponse {
-            id: r.id,
-            author_id: r.author_id,
-            author_username: r.author_username,
-            game: match r.game.as_str() {
-                "CS2" => GameTitle::Cs2,
-                "LOL" => GameTitle::Lol,
-                _ => GameTitle::Valorant,
-            },
-            title: r.title,
-            status: ClipStatus::Verified,
-            video_url: format!("https://cdn.wespace.gg/{}", r.r2_object_key),
-            file_sha256: r.file_sha256,
-            trigger_telemetry: r.trigger_telemetry,
-            duration_ms: r.duration_ms as u32,
-            created_at: r.created_at,
+        .map(|r| {
+            let game_text: String = r.get("game");
+            let r2_key: String = r.get("r2_object_key");
+            let dur: i32 = r.get("duration_ms");
+            ClipResponse {
+                id: r.get("id"),
+                author_id: r.get("author_id"),
+                author_username: r.get("author_username"),
+                game: match game_text.as_str() {
+                    "CS2" => GameTitle::Cs2,
+                    "LOL" => GameTitle::Lol,
+                    _ => GameTitle::Valorant,
+                },
+                title: r.get("title"),
+                status: ClipStatus::Verified,
+                video_url: format!("https://cdn.wespace.gg/{}", r2_key),
+                file_sha256: r.get("file_sha256"),
+                trigger_telemetry: r.get("trigger_telemetry"),
+                duration_ms: dur as u32,
+                created_at: r.get("created_at"),
+            }
         })
         .collect();
 

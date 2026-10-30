@@ -4,17 +4,17 @@ pub mod ws;
 
 pub use turn::TurnCredentialService;
 
+use crate::state::AppState;
 use axum::{
     extract::{Path, State},
     routing::get,
     Json, Router,
 };
-use crate::state::AppState;
 use uuid::Uuid;
 
 pub async fn get_lobby_rtc_config(
     State(state): State<AppState>,
-    Path(lobby_id): Path<Uuid>,
+    Path(_lobby_id): Path<Uuid>,
 ) -> Json<shared_types::lfg::RtcLobbyConfig> {
     let dummy_user_id = Uuid::new_v4().to_string();
     let config = state.turn.generate_credentials(&dummy_user_id, 12 * 3600);

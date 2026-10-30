@@ -25,8 +25,6 @@ impl CryptoService {
 
     /// Transient fallback for development when external PEM is not configured
     pub fn new_transient_dev() -> Result<Self, anyhow::Error> {
-        let dummy_rsa = include_str!("../../../../../docs/keys/dev_public.pem");
-        let dummy_private = include_bytes!("../../../../../docs/keys/dev_public.pem");
         // For dev fallback, allow initialization
         Ok(Self {
             argon2_semaphore: Arc::new(Semaphore::new(2)),

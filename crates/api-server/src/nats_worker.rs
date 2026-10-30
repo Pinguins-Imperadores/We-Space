@@ -1,4 +1,5 @@
 use async_nats::Client;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, info, warn};
@@ -41,15 +42,15 @@ pub async fn start_nats_worker(nats: Client, db: PgPool) {
             while let Some(msg) = sub.next().await {
                 if let Ok(event) = serde_json::from_slice::<ClipUploadedEvent>(&msg.payload) {
                     info!("Processing clips.uploaded event for clip {}", event.clip_id);
-                    let res = sqlx::query!(
+                    let res = sqlx::query(
                         r#"
                         UPDATE clips 
                         SET status = 'VERIFIED'
                         WHERE id = $1 AND file_sha256 = $2
                         "#,
-                        event.clip_id,
-                        event.file_sha256
                     )
+                    .bind(event.clip_id)
+                    .bind(&event.file_sha256)
                     .execute(&db_clips)
                     .await;
 
@@ -106,18 +107,21 @@ pub async fn start_nats_worker(nats: Client, db: PgPool) {
                     // Automatic penalty for high-severity toxicity or verified cheating
                     if alert.severity >= 3 {
                         let penalty = if alert.severity >= 4 { 15.00 } else { 5.00 };
-                        let _ = sqlx::query!(
+                        let _ = sqlx::query(
                             r#"
                             UPDATE users 
                             SET karma_score = GREATEST(0.00, karma_score - $1)
                             WHERE id = $2
                             "#,
-                            penalty,
-                            alert.target_id
                         )
+                        .bind(penalty)
+                        .bind(alert.target_id)
                         .execute(&db_mod)
                         .await;
-                        info!("Applied {} Karma penalty to target user {}", penalty, alert.target_id);
+                        info!(
+                            "Applied {} Karma penalty to target user {}",
+                            penalty, alert.target_id
+                        );
                     }
                 } else {
                     warn!("Invalid payload on wespace.moderation.alerts");
@@ -130,18 +134,24 @@ pub async fn start_nats_worker(nats: Client, db: PgPool) {
 // Publishing helper methods
 pub async fn publish_clip_uploaded(nats: &Client, event: &ClipUploadedEvent) -> anyhow::Result<()> {
     let payload = serde_json::to_vec(event)?;
-    nats.publish("wespace.clips.uploaded", payload.into()).await?;
+    nats.publish("wespace.clips.uploaded", payload.into())
+        .await?;
     Ok(())
 }
 
 pub async fn publish_lobby_event(nats: &Client, event: &LobbyEvent) -> anyhow::Result<()> {
     let payload = serde_json::to_vec(event)?;
-    nats.publish("wespace.lfg.lobby.events", payload.into()).await?;
+    nats.publish("wespace.lfg.lobby.events", payload.into())
+        .await?;
     Ok(())
 }
 
-pub async fn publish_moderation_alert(nats: &Client, event: &ModerationAlertEvent) -> anyhow::Result<()> {
+pub async fn publish_moderation_alert(
+    nats: &Client,
+    event: &ModerationAlertEvent,
+) -> anyhow::Result<()> {
     let payload = serde_json::to_vec(event)?;
-    nats.publish("wespace.moderation.alerts", payload.into()).await?;
+    nats.publish("wespace.moderation.alerts", payload.into())
+        .await?;
     Ok(())
 }

@@ -29,4 +29,6 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 dotenvy = "0.15"
-shared-types = { path = "../shared-types" }
+futures-util = "0.3"
+tokio-stream = "0.1"
+shared-types = { package = "wespace-shared-types", path = "../shared-types" }

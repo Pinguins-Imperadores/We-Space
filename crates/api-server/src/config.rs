@@ -25,12 +25,12 @@ impl AppConfig {
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8080),
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://wespace_admin:dev_secret_pass_change_me@127.0.0.1:5432/wespace_core".into()),
-            redis_url: env::var("REDIS_URL")
-                .unwrap_or_else(|_| "redis://127.0.0.1:6379".into()),
-            nats_url: env::var("NATS_URL")
-                .unwrap_or_else(|_| "nats://127.0.0.1:4222".into()),
+            database_url: env::var("DATABASE_URL").unwrap_or_else(|_| {
+                "postgres://wespace_admin:dev_secret_pass_change_me@127.0.0.1:5432/wespace_core"
+                    .into()
+            }),
+            redis_url: env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into()),
+            nats_url: env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".into()),
             jwt_private_key_pem: env::var("JWT_PRIVATE_KEY")
                 .or_else(|_| std::fs::read_to_string("docs/keys/dev_private.pem"))
                 .unwrap_or_default(),
@@ -46,8 +46,10 @@ impl AppConfig {
                 .unwrap_or_else(|_| "dev_turn_hmac_secret_32bytes_min!".into()),
             turn_realm: env::var("TURN_REALM").unwrap_or_else(|_| "turn.wespace.gg".into()),
             r2_account_id: env::var("R2_ACCOUNT_ID").unwrap_or_else(|_| "dev_r2_account".into()),
-            r2_bucket_name: env::var("R2_BUCKET_NAME").unwrap_or_else(|_| "wespace-clips-prod".into()),
-            r2_access_key_id: env::var("R2_ACCESS_KEY_ID").unwrap_or_else(|_| "dev_access_key".into()),
+            r2_bucket_name: env::var("R2_BUCKET_NAME")
+                .unwrap_or_else(|_| "wespace-clips-prod".into()),
+            r2_access_key_id: env::var("R2_ACCESS_KEY_ID")
+                .unwrap_or_else(|_| "dev_access_key".into()),
             r2_secret_access_key: env::var("R2_SECRET_ACCESS_KEY")
                 .unwrap_or_else(|_| "dev_secret_access_key".into()),
         }

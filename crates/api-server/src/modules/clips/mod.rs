@@ -3,11 +3,11 @@ pub mod r2;
 
 pub use r2::CloudflareR2Service;
 
+use crate::state::AppState;
 use axum::{
     routing::{get, post},
     Router,
 };
-use crate::state::AppState;
 
 pub fn clips_routes() -> Router<AppState> {
     Router::new()

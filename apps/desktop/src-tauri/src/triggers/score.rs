@@ -35,8 +35,16 @@ impl TriggerWeights {
         let score = (kills as f32 * self.kill_weight)
             + (headshots as f32 * self.headshot_weight)
             + (if is_clutch { self.clutch_weight } else { 0.0 })
-            + (if has_audio_spike { self.audio_spike_weight } else { 0.0 })
-            + (if has_ocr_banner { self.ocr_banner_weight } else { 0.0 });
+            + (if has_audio_spike {
+                self.audio_spike_weight
+            } else {
+                0.0
+            })
+            + (if has_ocr_banner {
+                self.ocr_banner_weight
+            } else {
+                0.0
+            });
 
         let should_clip = score >= self.threshold;
         (score, should_clip)

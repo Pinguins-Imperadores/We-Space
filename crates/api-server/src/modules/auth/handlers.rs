@@ -1,12 +1,14 @@
 use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use serde_json::Value;
 use shared_types::auth::{AuthResponse, LoginRequest, RegisterRequest};
+use sqlx::Row;
 use uuid::Uuid;
 
 pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     if payload.username.trim().len() < 3 || payload.password.len() < 8 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -29,29 +31,35 @@ pub async fn register(
         })?;
 
     let user_id = Uuid::new_v4();
-    let res = sqlx::query!(
+    let res = sqlx::query(
         r#"
         INSERT INTO users (id, username, email, password_hash, role, karma_score)
         VALUES ($1, $2, $3, $4, 'PLAYER', 100.00)
-        RETURNING id, username, role as "role: String"
+        RETURNING id, username, role::text as role
         "#,
-        user_id,
-        payload.username,
-        payload.email,
-        password_hash
     )
+    .bind(user_id)
+    .bind(&payload.username)
+    .bind(&payload.email)
+    .bind(&password_hash)
     .fetch_one(&state.db)
     .await;
 
     match res {
-        Ok(user) => {
+        Ok(row) => {
+            let uid: Uuid = row.get("id");
+            let uname: String = row.get("username");
+            let urole: String = row.get("role");
+
             let access_token = state
                 .crypto
-                .generate_access_token(user.id, user.username.clone(), user.role.clone())
+                .generate_access_token(uid, uname.clone(), urole.clone())
                 .map_err(|e| {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({ "error": "TOKEN_ERROR", "message": e.to_string() })),
+                        Json(
+                            serde_json::json!({ "error": "TOKEN_ERROR", "message": e.to_string() }),
+                        ),
                     )
                 })?;
 
@@ -61,9 +69,9 @@ pub async fn register(
                     access_token,
                     token_type: "Bearer".into(),
                     expires_in_seconds: 900,
-                    user_id: user.id,
-                    username: user.username,
-                    role: user.role,
+                    user_id: uid,
+                    username: uname,
+                    role: urole,
                 }),
             ))
         }
@@ -80,15 +88,15 @@ pub async fn register(
 pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let user = sqlx::query!(
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    let row = sqlx::query(
         r#"
-        SELECT id, username, password_hash, role as "role: String"
+        SELECT id, username, password_hash, role::text as role
         FROM users
         WHERE (username = $1 OR email = $1) AND deleted_at IS NULL
         "#,
-        payload.username_or_email
     )
+    .bind(&payload.username_or_email)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| {
@@ -98,8 +106,8 @@ pub async fn login(
         )
     })?;
 
-    let user = match user {
-        Some(u) => u,
+    let row = match row {
+        Some(r) => r,
         None => {
             return Err((
                 StatusCode::UNAUTHORIZED,
@@ -111,9 +119,14 @@ pub async fn login(
         }
     };
 
+    let user_id: Uuid = row.get("id");
+    let username: String = row.get("username");
+    let password_hash: String = row.get("password_hash");
+    let role: String = row.get("role");
+
     let is_valid = state
         .crypto
-        .verify_password(payload.password, user.password_hash)
+        .verify_password(payload.password, password_hash)
         .await
         .unwrap_or(false);
 
@@ -129,7 +142,7 @@ pub async fn login(
 
     let access_token = state
         .crypto
-        .generate_access_token(user.id, user.username.clone(), user.role.clone())
+        .generate_access_token(user_id, username.clone(), role.clone())
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -141,8 +154,8 @@ pub async fn login(
         access_token,
         token_type: "Bearer".into(),
         expires_in_seconds: 900,
-        user_id: user.id,
-        username: user.username,
-        role: user.role,
+        user_id,
+        username,
+        role,
     }))
 }

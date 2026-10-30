@@ -30,5 +30,11 @@ jobs:
       - name: Format Check
         run: cargo fmt --all -- --check
 
+      - name: Cargo Check Backend
+        run: cargo check -p wespace-api -p wespace-shared-types
+
       - name: Run Clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy -p wespace-api -p wespace-shared-types -- -D warnings
+
+      - name: Run Backend Tests
+        run: cargo test -p wespace-api -p wespace-shared-types

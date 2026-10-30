@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 use shared_types::lfg::{CommStyle, GameTitle, LfgPlayerProfile};
+use sqlx::Row;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -31,15 +32,14 @@ pub async fn search_duos(
     let rank_min = query.rank_min.unwrap_or(1);
     let rank_max = query.rank_max.unwrap_or(30);
 
-    let rows = sqlx::query!(
+    let rows = sqlx::query(
         r#"
         SELECT 
             p.user_id,
             u.username,
             p.rank_tier,
             p.primary_role,
-            u.karma_score::float4 as karma_score,
-            p.comm_preferences as "comm_preferences: Vec<comm_style>"
+            u.karma_score::float4 as karma_score
         FROM player_game_profiles p
         JOIN users u ON u.id = p.user_id
         WHERE p.game = $1::game_title
@@ -49,10 +49,10 @@ pub async fn search_duos(
         ORDER BY u.karma_score DESC
         LIMIT 50
         "#,
-        game_str as _,
-        rank_min,
-        rank_max
     )
+    .bind(game_str)
+    .bind(rank_min)
+    .bind(rank_max)
     .fetch_all(&state.db)
     .await
     .map_err(|e| {
@@ -64,15 +64,18 @@ pub async fn search_duos(
 
     let profiles: Vec<LfgPlayerProfile> = rows
         .into_iter()
-        .map(|r| LfgPlayerProfile {
-            user_id: r.user_id,
-            username: r.username,
-            game: query.game,
-            rank_tier: r.rank_tier,
-            primary_role: r.primary_role,
-            comm_preferences: vec![CommStyle::CleanCalls],
-            karma_score: r.karma_score.unwrap_or(100.0),
-            looking_for_group: true,
+        .map(|r| {
+            let karma: Option<f32> = r.get("karma_score");
+            LfgPlayerProfile {
+                user_id: r.get("user_id"),
+                username: r.get("username"),
+                game: query.game,
+                rank_tier: r.get("rank_tier"),
+                primary_role: r.get("primary_role"),
+                comm_preferences: vec![CommStyle::CleanCalls],
+                karma_score: karma.unwrap_or(100.0),
+                looking_for_group: true,
+            }
         })
         .collect();
 

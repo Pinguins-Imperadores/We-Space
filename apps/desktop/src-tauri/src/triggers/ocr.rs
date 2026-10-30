@@ -10,8 +10,8 @@ pub struct FastRoiOcr {
 impl Default for FastRoiOcr {
     fn default() -> Self {
         Self {
-            crop_x: 810,    // Center-x for 1080p Kill Banner
-            crop_y: 840,    // Bottom-y for 1080p Kill Banner
+            crop_x: 810, // Center-x for 1080p Kill Banner
+            crop_y: 840, // Bottom-y for 1080p Kill Banner
             crop_width: 300,
             crop_height: 80,
         }

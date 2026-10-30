@@ -1,8 +1,4 @@
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-type HmacSha256 = Hmac<Sha256>;
 
 pub struct CloudflareR2Service {
     account_id: String,
