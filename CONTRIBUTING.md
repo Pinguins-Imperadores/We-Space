@@ -25,6 +25,14 @@ Trabalhamos com o modelo trunk-based com branches temáticas curtas:
 - `perf/<escopo>-<descricao>`: Otimizações de CPU/GPU, latência ou tamanho de bundle.
 - `chore/<escopo>-<descricao>`: Dependências, configurações e documentação interna.
 
+### 🛡️ Proteção da Branch Principal (`main`)
+
+A branch `main` é o núcleo estável de produção do projeto e possui regras ativas de proteção via **GitHub Rulesets**:
+
+- 🚫 **Bloqueio de Force Push (`non_fast_forward`)**: É terminantemente proibido sobrescrever ou reescrever o histórico de commits da branch `main` (`git push --force` ou `--force-with-lease`). O GitHub rejeitará automaticamente qualquer tentativa.
+- 🚫 **Bloqueio de Deleção de Branch (`deletion`)**: A branch `main` está blindada contra deleção acidental ou intencional (`git push origin --delete main`).
+- 🔄 **Fluxo de Integração e Pull Requests**: O desenvolvimento deve ocorrer em branches temáticas curtas (`feat/*`, `fix/*`, `sec/*`, etc.) e ser integrado à `main` via Pull Request, após validação da suíte local e aprovação das rotinas de CI (`ci-backend`, `ci-frontend`, `security-gitleaks`).
+
 ---
 
 ## ✍️ Conventional Commits
@@ -45,7 +53,7 @@ test(karma): add anti-brigading exponential decay test suite
 
 ## 🛠️ Comandos de Diagnóstico e Validação Local
 
-Antes de abrir um Pull Request ou commitar na branch principal, execute obrigatoriamente a suíte de validação:
+Antes de abrir um Pull Request ou enviar alterações para a branch principal, execute obrigatoriamente a suíte de validação:
 
 ### 1. Formatação e Linting no Rust
 ```bash

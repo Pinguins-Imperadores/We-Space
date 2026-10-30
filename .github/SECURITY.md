@@ -24,6 +24,9 @@ A plataforma **We Space** adota uma postura rigorosa de **Zero-Trust**, minimiza
 - A captura visual opera via `Windows.Graphics.Capture API` oficial do Windows, idêntica ao Xbox Game Bar e OBS Studio.
 - A telemetria de CS2 utiliza o protocolo oficial suportado pela Valve: **Game State Integration (GSI)** via porta HTTP local configurada em `gamestate_integration_wespace.cfg`.
 
+### 1.5. Integridade do Código-Fonte e Proteção de Branch (GitHub Rulesets)
+- **Blindagem da Branch `main`**: A integridade do código-fonte é protegida no nível da infraestrutura do repositório por **GitHub Rulesets**. As regras aplicadas bloqueiam deleção de branch (`deletion`) e reescrita de histórico via force-push (`non_fast_forward`), assegurando a rastreabilidade total de commits e prevenindo adulteração maliciosa ou acidental da linha principal de desenvolvimento.
+
 ---
 
 ## 2. Reporte de Vulnerabilidades
