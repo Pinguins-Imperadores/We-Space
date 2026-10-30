@@ -17,7 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@wespace/api-client": ["../../packages/api-client/src"],
+      "@wespace/ui": ["../../packages/ui/src"]
     }
   },
   "include": ["src"]

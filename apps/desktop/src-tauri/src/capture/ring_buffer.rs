@@ -63,3 +63,66 @@ impl GopRingBuffer {
         self.buffer.lock().unwrap().is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_gop(index: u64, size: usize) -> EncodedGop {
+        EncodedGop {
+            gop_index: index,
+            timestamp: Instant::now(),
+            data: vec![0u8; size],
+            is_keyframe: true,
+            duration_ms: 1000,
+            kill_events_count: 0,
+        }
+    }
+
+    #[test]
+    fn test_ring_buffer_push_and_rotation() {
+        let ring = GopRingBuffer::new(3);
+        assert!(ring.is_empty());
+        assert_eq!(ring.len(), 0);
+
+        ring.push_gop(dummy_gop(0, 100));
+        ring.push_gop(dummy_gop(1, 100));
+        ring.push_gop(dummy_gop(2, 100));
+        assert_eq!(ring.len(), 3);
+
+        // Push 4th GOP -> 0 should be evicted, keeping 1, 2, 3
+        ring.push_gop(dummy_gop(3, 100));
+        assert_eq!(ring.len(), 3);
+
+        // Push 5th GOP -> 1 should be evicted, keeping 2, 3, 4
+        ring.push_gop(dummy_gop(4, 100));
+        assert_eq!(ring.len(), 3);
+
+        let highlight = ring.extract_highlight(2, 1);
+        assert_eq!(highlight.len(), 3);
+        let indices: Vec<u64> = highlight.into_iter().map(|g| g.gop_index).collect();
+        assert_eq!(indices, vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn test_ring_buffer_memory_usage() {
+        let ring = GopRingBuffer::new(5);
+        ring.push_gop(dummy_gop(0, 1024));
+        ring.push_gop(dummy_gop(1, 2048));
+
+        assert_eq!(ring.memory_usage_bytes(), 3072);
+    }
+
+    #[test]
+    fn test_extract_highlight_partial_when_buffer_small() {
+        let ring = GopRingBuffer::new(45);
+        ring.push_gop(dummy_gop(0, 100));
+        ring.push_gop(dummy_gop(1, 100));
+
+        // Request 40s pre + 5s post, but only 2s are buffered
+        let highlight = ring.extract_highlight(40, 5);
+        assert_eq!(highlight.len(), 2);
+        assert_eq!(highlight[0].gop_index, 0);
+        assert_eq!(highlight[1].gop_index, 1);
+    }
+}

@@ -10,6 +10,8 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        '@wespace/api-client': path.resolve(__dirname, '../../packages/api-client/src'),
+        '@wespace/ui': path.resolve(__dirname, '../../packages/ui/src'),
       },
     },
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

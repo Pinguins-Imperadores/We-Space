@@ -14,7 +14,9 @@ import { MatchLogModal } from './components/modals/MatchLogModal';
 import { INITIAL_CLIPS, PLAYERS_DIRECTORY, ONGOING_MATCH_LOGS } from './data/mockData';
 import { Clip, Player, PlayerReview } from './types';
 import { ThemeAtmosphereProvider, useAtmosphere, getRgba } from './context/ThemeAtmosphereContext';
-import { soundFx } from './utils/soundEngine';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/modals/AuthModal';
+import { soundFx } from '@wespace/ui';
 
 function MainApp() {
   const { isPaletteModalOpen, setIsPaletteModalOpen, customColor, themeConfig } = useAtmosphere();
@@ -300,14 +302,18 @@ function MainApp() {
         clip={modalClip || null}
       />
 
+      <AuthModal />
+
     </div>
   );
 }
 
 export default function App() {
   return (
-    <ThemeAtmosphereProvider>
-      <MainApp />
-    </ThemeAtmosphereProvider>
+    <AuthProvider>
+      <ThemeAtmosphereProvider>
+        <MainApp />
+      </ThemeAtmosphereProvider>
+    </AuthProvider>
   );
 }

@@ -63,3 +63,46 @@ impl TurnCredentialService {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_coturn_hmac_sha1_generation() {
+        let secret = "wespace_super_secret_turn_key";
+        let service = TurnCredentialService::new(
+            "turn.wespace.gg".into(),
+            3478,
+            secret.into(),
+            "wespace.gg".into(),
+        );
+
+        let config = service.generate_credentials("player_uuid_42", 3600);
+        assert_eq!(config.ttl_seconds, 3600);
+        assert_eq!(config.ice_servers.len(), 2);
+
+        // 1. Verify STUN entry
+        let stun = &config.ice_servers[0];
+        assert_eq!(stun.urls, vec!["stun:turn.wespace.gg:3478"]);
+        assert!(stun.username.is_none());
+        assert!(stun.credential.is_none());
+
+        // 2. Verify TURN entry with HMAC-SHA1
+        let turn = &config.ice_servers[1];
+        assert_eq!(turn.urls.len(), 2);
+        assert!(turn.urls[0].starts_with("turn:turn.wespace.gg:3478?transport=udp"));
+
+        let username = turn.username.as_ref().expect("Username must exist");
+        let credential = turn.credential.as_ref().expect("Credential must exist");
+
+        assert!(username.ends_with(":player_uuid_42"));
+
+        // Validate HMAC signature independently
+        let mut expected_mac = HmacSha1::new_from_slice(secret.as_bytes()).unwrap();
+        expected_mac.update(username.as_bytes());
+        let expected_cred = STANDARD.encode(expected_mac.finalize().into_bytes());
+
+        assert_eq!(credential, &expected_cred);
+    }
+}

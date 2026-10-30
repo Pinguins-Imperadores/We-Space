@@ -23,7 +23,8 @@ import {
 import confetti from 'canvas-confetti';
 import { OngoingMatchLog, GameType, MatchEvent, Clip } from '../types';
 import { useAtmosphere, getRgba, isLightColor } from '../context/ThemeAtmosphereContext';
-import { soundFx } from '../utils/soundEngine';
+import { soundFx } from '@wespace/ui';
+import { useNativeClipper } from '../hooks/useNativeClipper';
 
 interface ClipperEngineProps {
   matchLogs: OngoingMatchLog[];
@@ -44,6 +45,7 @@ export const ClipperEngine: React.FC<ClipperEngineProps> = ({
   currentUser
 }) => {
   const { customColor } = useAtmosphere();
+  const { isTauriEnvironment, status: nativeStatus, startCapture, stopCapture } = useNativeClipper();
   const [selectedGame, setSelectedGame] = useState<GameType>('Valorant');
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string>('evt-2');

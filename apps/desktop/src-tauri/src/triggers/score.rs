@@ -42,3 +42,49 @@ impl TriggerWeights {
         (score, should_clip)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_single_kill_without_extra_does_not_trigger() {
+        let weights = TriggerWeights::standard();
+        let (score, should_clip) = weights.calculate(1, 0, false, false, false);
+        assert!((score - 0.45).abs() < 1e-4);
+        assert!(!should_clip);
+    }
+
+    #[test]
+    fn test_double_kill_with_headshot_triggers() {
+        let weights = TriggerWeights::standard();
+        let (score, should_clip) = weights.calculate(2, 1, false, false, false);
+        assert!((score - 1.05).abs() < 1e-4);
+        assert!(should_clip);
+    }
+
+    #[test]
+    fn test_clutch_with_kill_triggers() {
+        let weights = TriggerWeights::standard();
+        let (score, should_clip) = weights.calculate(1, 0, true, false, false);
+        assert!((score - 1.05).abs() < 1e-4);
+        assert!(should_clip);
+    }
+
+    #[test]
+    fn test_audio_spike_and_ocr_banner_trigger() {
+        let weights = TriggerWeights::standard();
+        let (score, should_clip) = weights.calculate(1, 0, false, true, true);
+        assert!((score - 1.10).abs() < 1e-4);
+        assert!(should_clip);
+    }
+
+    #[test]
+    fn test_ace_maximum_score() {
+        let weights = TriggerWeights::standard();
+        let (score, should_clip) = weights.calculate(5, 5, true, true, true);
+        // (5 * 0.45) + (5 * 0.15) + 0.60 + 0.25 + 0.40 = 2.25 + 0.75 + 1.25 = 4.25
+        assert!((score - 4.25).abs() < 1e-4);
+        assert!(should_clip);
+    }
+}

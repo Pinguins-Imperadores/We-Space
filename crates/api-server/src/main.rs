@@ -1,6 +1,7 @@
 mod config;
 mod middleware;
 mod modules;
+mod nats_worker;
 mod state;
 
 use axum::{
@@ -106,7 +107,10 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
     };
 
-    // 5. CORS Layer
+    // 5. Spawn background NATS JetStream Worker
+    tokio::spawn(nats_worker::start_nats_worker(state.nats.clone(), state.db.clone()));
+
+    // 6. CORS Layer
     let cors = CorsLayer::new()
         .allow_origin([
             "https://wespace.gg".parse()?,

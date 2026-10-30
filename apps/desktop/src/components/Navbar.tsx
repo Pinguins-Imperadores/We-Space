@@ -22,7 +22,9 @@ import {
   getRgba, 
   isLightColor 
 } from '../context/ThemeAtmosphereContext';
-import { soundFx } from '../utils/soundEngine';
+import { soundFx } from '@wespace/ui';
+import { useAuth } from '../context/AuthContext';
+import { Wifi, WifiOff } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'feed' | 'clipper' | 'duos' | 'profiles' | 'trust';
@@ -52,6 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectPlayer,
   currentUser
 }) => {
+  const { isOfflineMode, isAuthenticated, user, openAuthModal, checkBackendConnection } = useAuth();
   const { 
     customColor, 
     selectPreset, 
@@ -291,6 +294,42 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
           </div>
+
+          {/* Connection Status Badge (Smart Offline Fallback) */}
+          {isOfflineMode ? (
+            <button
+              onClick={() => {
+                soundFx.playTactileClick();
+                checkBackendConnection();
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-semibold hover:bg-amber-500/20 transition-all cursor-pointer"
+              title="Clique para testar conexão com backend Axum (127.0.0.1:8080)"
+            >
+              <WifiOff className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xl:inline">Offline (Mock)</span>
+            </button>
+          ) : (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold"
+              title="Conectado à API Axum em 127.0.0.1:8080"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="hidden xl:inline">API Online</span>
+            </div>
+          )}
+
+          {/* Auth Button if not logged in */}
+          {!isAuthenticated && (
+            <button
+              onClick={() => {
+                soundFx.playTactileClick();
+                openAuthModal();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all text-xs font-bold cursor-pointer"
+            >
+              Entrar
+            </button>
+          )}
 
           {/* Primary CTA: Publish Highlight */}
           <button
