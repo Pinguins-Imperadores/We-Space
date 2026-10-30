@@ -1,0 +1,37 @@
+# Dependencies & Package Managers
+node_modules/
+.pnpm-store/
+package-lock.json
+
+# Rust Target & Builds
+target/
+Cargo.lock
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+!docs/keys/dev_public.pem
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.directory
+
+# Local Attachments & Temporary Archives
+Prompt.txt
+*.zip
+*.pdf
+
+# Vite & Frontend Output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Tauri Output
+apps/desktop/src-tauri/target/

@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/shared-types",
+    "crates/api-server",
+    "apps/desktop/src-tauri"
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["We Space Team <dev@wespace.gg>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"

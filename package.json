@@ -1,0 +1,22 @@
+{
+  "name": "we-space-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:desktop": "npm run --prefix apps/desktop dev",
+    "dev:web": "npm run --prefix apps/web-pwa dev",
+    "build:desktop": "npm run --prefix apps/desktop build",
+    "build:web": "npm run --prefix apps/web-pwa build",
+    "tauri:dev": "npm run --prefix apps/desktop tauri dev",
+    "tauri:build": "npm run --prefix apps/desktop tauri build",
+    "docker:dev": "docker compose -f infra/docker/docker-compose.dev.yml up -d",
+    "docker:down": "docker compose -f infra/docker/docker-compose.dev.yml down"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.2"
+  }
+}

@@ -1,0 +1,96 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wespace-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wespace_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_secret_pass_change_me}
+      POSTGRES_DB: wespace_core
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c max_connections=200
+      -c work_mem=16MB
+      -c random_page_cost=1.1
+      -c log_min_duration_statement=250
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wespace_admin -d wespace_core"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: wespace-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_pass}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: wespace-nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"   # Clients
+      - "8222:8222"   # Management & Metrics
+    command: >
+      -js
+      -sd /data/jetstream
+      -m 8222
+      --max_payload 2MB
+      --max_mem_store 256MB
+      --max_file_store 2GB
+    volumes:
+      - nats_data:/data/jetstream
+
+  minio:
+    image: minio/minio:latest
+    container_name: wespace-minio-r2-mock
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-dev_access_key}
+      MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-dev_secret_access_key}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: wespace-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "5349:5349/udp"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+
+volumes:
+  pg_data:
+  redis_data:
+  nats_data:
+  minio_data:
