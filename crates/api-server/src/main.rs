@@ -123,6 +123,13 @@ async fn main() -> anyhow::Result<()> {
         state.db.clone(),
     ));
 
+    // 5.1. Spawn background Redis Batch Matchmaker Worker (Weighted in-memory queue)
+    tokio::spawn(modules::lfg::queue::start_batch_matchmaking_worker(
+        state.redis.clone(),
+        state.nats.clone(),
+        state.db.clone(),
+    ));
+
     // 6. CORS Layer
     let cors = CorsLayer::new()
         .allow_origin([

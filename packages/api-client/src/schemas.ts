@@ -148,3 +148,49 @@ export interface ReviewOutcomeResponse {
   weight_applied: number;
   new_target_karma: number;
 }
+
+export interface QueueTicket {
+  user_id: string;
+  username: string;
+  game: GameTitle;
+  rank_tier: number;
+  primary_role: string;
+  comm_preferences: CommStyle[];
+  karma_score: number;
+  joined_at: number;
+  weighted_score: number;
+}
+
+export interface JoinQueueRequest {
+  game: GameTitle;
+  rank_tier?: number;
+  primary_role?: string;
+  comm_preferences?: CommStyle[];
+}
+
+export interface QueueStatusResponse {
+  in_queue: boolean;
+  game?: GameTitle;
+  position?: number;
+  total_in_queue: number;
+  elapsed_seconds?: number;
+  current_tolerance?: number;
+  weighted_score?: number;
+}
+
+export interface DuoMatchResult {
+  match_id: string;
+  lobby_id: string;
+  game: GameTitle;
+  player_a: QueueTicket;
+  player_b: QueueTicket;
+  score_delta: number;
+  matched_at: number;
+}
+
+export interface BatchMatchmakingResponse {
+  game: GameTitle;
+  matched_duos: DuoMatchResult[];
+  remaining_in_queue: number;
+  batch_timestamp: number;
+}
