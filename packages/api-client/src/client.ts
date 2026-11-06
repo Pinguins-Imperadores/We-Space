@@ -4,6 +4,11 @@ import {
   LfgPlayerProfile,
   PresignedUploadResponse,
   ReviewOutcomeResponse,
+  GameTitle,
+  CommStyle,
+  QueueTicket,
+  QueueStatusResponse,
+  BatchMatchmakingResponse,
 } from './schemas';
 
 export class WeSpaceApiClient {
@@ -210,6 +215,37 @@ export class WeSpaceApiClient {
   // --- Matchmaking & Lobbies APIs ---
   async searchDuos(game: string = 'VALORANT'): Promise<LfgPlayerProfile[]> {
     return this.request<LfgPlayerProfile[]>(`/lfg/search?game=${game}`);
+  }
+
+  // --- In-Memory Weighted Redis Queue APIs ---
+  async joinLfgQueue(payload: {
+    game: GameTitle;
+    rank_tier?: number;
+    primary_role?: string;
+    comm_preferences?: CommStyle[];
+  }): Promise<QueueTicket> {
+    return this.request<QueueTicket>('/lfg/queue/join', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async leaveLfgQueue(game?: GameTitle): Promise<{ status: string }> {
+    return this.request<{ status: string }>('/lfg/queue/leave', {
+      method: 'POST',
+      body: JSON.stringify(game ? { game } : {}),
+    });
+  }
+
+  async getLfgQueueStatus(): Promise<QueueStatusResponse> {
+    return this.request<QueueStatusResponse>('/lfg/queue/status');
+  }
+
+  async triggerBatchMatchmaking(game: GameTitle = 'VALORANT'): Promise<BatchMatchmakingResponse> {
+    return this.request<BatchMatchmakingResponse>('/lfg/queue/batch-match', {
+      method: 'POST',
+      body: JSON.stringify({ game }),
+    });
   }
 
   async getLobbyRtcConfig(lobbyId: string): Promise<{ ice_servers: { urls: string[]; username?: string; credential?: string }[] }> {

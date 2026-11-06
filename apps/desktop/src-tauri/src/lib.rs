@@ -80,6 +80,46 @@ pub mod commands {
 
         Ok(path)
     }
+
+    /// System Tray & OS Level Notification for Matchmaking Duo Discovery
+    /// Requests critical user attention on taskbar/tray and triggers native OS toast notification
+    #[tauri::command]
+    pub fn notify_match_found(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+        use tauri::Manager;
+
+        // 1. Flash and demand user attention on Windows Taskbar / System Tray
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.request_user_attention(Some(tauri::window::UserAttentionType::Critical));
+            let _ = window.unminimize();
+            let _ = window.show();
+        }
+
+        // 2. Native OS Notification Toast on Windows
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+            let clean_title = title.replace('\'', "''").replace('"', "\\\"");
+            let clean_body = body.replace('\'', "''").replace('"', "\\\"");
+
+            let ps_script = format!(
+                r#"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;
+$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);
+$textNodes = $template.GetElementsByTagName('text');
+$textNodes.Item(0).AppendChild($template.CreateTextNode('{}')) > $null;
+$textNodes.Item(1).AppendChild($template.CreateTextNode('{}')) > $null;
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('We Space — Hub Gamer');
+$notification = [Windows.UI.Notifications.ToastNotification]::new($template);
+$notifier.Show($notification);"#,
+                clean_title, clean_body
+            );
+
+            let _ = Command::new("powershell")
+                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_script])
+                .spawn();
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -100,7 +140,8 @@ pub fn run() {
             commands::get_auth_token,
             commands::clear_auth_token,
             commands::compute_clip_sha256,
-            commands::validate_media_path
+            commands::validate_media_path,
+            commands::notify_match_found
         ])
         .run(tauri::generate_context!())
         .expect("error while running We Space desktop application");

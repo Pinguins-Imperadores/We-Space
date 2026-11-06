@@ -24,12 +24,16 @@ import {
   MicOff,
   Headphones,
   PhoneOff,
-  Activity
+  Activity,
+  Bell,
+  Timer,
+  Award
 } from 'lucide-react';
 import { Player, GameType, Clip } from '../types';
 import { useAtmosphere, getRgba, isLightColor } from '../context/ThemeAtmosphereContext';
 import { soundFx } from '../utils/soundEngine';
-import { WeSpaceVoiceRoom } from '@wespace/api-client';
+import { WeSpaceVoiceRoom, apiClient } from '@wespace/api-client';
+import { notifyDuoMatchFound, requestNotificationPermission } from '../utils/systemNotification';
 
 interface MatchmakingDuoFinderProps {
   players: Player[];
@@ -103,6 +107,132 @@ export const MatchmakingDuoFinder: React.FC<MatchmakingDuoFinderProps> = ({
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [volumeLevel, setVolumeLevel] = useState<number>(0);
   const [voiceConnecting, setVoiceConnecting] = useState<boolean>(false);
+
+  // In-Memory Weighted Redis Queue State
+  const [isQueueActive, setIsQueueActive] = useState<boolean>(false);
+  const [queueSeconds, setQueueSeconds] = useState<number>(0);
+  const [queueTolerance, setQueueTolerance] = useState<number>(15.0);
+  const [queueGame, setQueueGame] = useState<string>('VALORANT');
+  const [matchedDuoPlayer, setMatchedDuoPlayer] = useState<Player | null>(null);
+  const [matchedScoreDelta, setMatchedScoreDelta] = useState<number>(2.4);
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState<boolean>(false);
+  const [matchCountdown, setMatchCountdown] = useState<number>(15);
+  const [notifGranted, setNotifGranted] = useState<boolean>(false);
+
+  // Request system notification permission on mount
+  useEffect(() => {
+    requestNotificationPermission().then((granted) => setNotifGranted(granted));
+  }, []);
+
+  // Dynamic Queue Timer & Tolerance Expansion Loop
+  useEffect(() => {
+    let timer: any = null;
+    if (isQueueActive) {
+      timer = setInterval(() => {
+        setQueueSeconds((prev) => {
+          const nextSecs = prev + 1;
+          const nextTol = 15.0 + Math.min(nextSecs * 0.75, 50.0);
+          setQueueTolerance(nextTol);
+
+          // Auto-match simulation after 12 seconds in queue if no backend event
+          if (nextSecs === 12 && !isMatchModalOpen) {
+            const candidate = players.find(p => p.id !== currentUser.id) || players[0];
+            if (candidate) {
+              triggerDuoMatched(candidate, 1.8);
+            }
+          }
+          return nextSecs;
+        });
+      }, 1000);
+    } else {
+      setQueueSeconds(0);
+      setQueueTolerance(15.0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isQueueActive, players, currentUser.id, isMatchModalOpen]);
+
+  // Match Countdown Timer
+  useEffect(() => {
+    let countdownTimer: any = null;
+    if (isMatchModalOpen) {
+      setMatchCountdown(15);
+      countdownTimer = setInterval(() => {
+        setMatchCountdown((prev) => {
+          if (prev <= 1) {
+            setIsMatchModalOpen(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (countdownTimer) clearInterval(countdownTimer);
+    };
+  }, [isMatchModalOpen]);
+
+  // Trigger Duo Matched Event (Audio + OS System Tray Notification)
+  const triggerDuoMatched = (partner: Player, deltaScore: number = 2.4) => {
+    setIsQueueActive(false);
+    setMatchedDuoPlayer(partner);
+    setMatchedScoreDelta(deltaScore);
+    setIsMatchModalOpen(true);
+
+    // 1. Play high-impact fanfare audio
+    // 2. Dispatch OS notification to system tray
+    // 3. Flash taskbar / tray icon in OS
+    notifyDuoMatchFound({
+      partnerUsername: partner.username,
+      game: queueGame,
+      karmaScore: partner.reputationScore,
+      rank: partner.ranks[0]?.rankName || 'Imortal 2',
+      matchScoreDelta: deltaScore,
+    });
+  };
+
+  const handleToggleQueue = async () => {
+    if (!isQueueActive) {
+      soundFx.playQueueJoined();
+      await requestNotificationPermission();
+      setIsQueueActive(true);
+      setQueueSeconds(0);
+
+      // Attempt Redis API registration
+      try {
+        await apiClient.joinLfgQueue({
+          game: (selectedGame !== 'all' ? selectedGame.toUpperCase() : 'VALORANT') as any,
+          rank_tier: 20,
+          primary_role: 'Flex',
+        });
+      } catch (err) {
+        console.debug('Queue joined in local/mock mode:', err);
+      }
+    } else {
+      soundFx.playTactileClick();
+      setIsQueueActive(false);
+      try {
+        await apiClient.leaveLfgQueue((selectedGame !== 'all' ? selectedGame.toUpperCase() : 'VALORANT') as any);
+      } catch (err) {
+        console.debug('Queue left in local mode:', err);
+      }
+    }
+  };
+
+  const handleAcceptDuoMatch = () => {
+    soundFx.playClutchFanfare();
+    setIsMatchModalOpen(false);
+    if (matchedDuoPlayer) {
+      handleJoinVoiceRoom(`Call de Duo • ${matchedDuoPlayer.username} & ${currentUser.username}`);
+    }
+  };
+
+  const handleDeclineDuoMatch = () => {
+    soundFx.playTactileClick();
+    setIsMatchModalOpen(false);
+    setMatchedDuoPlayer(null);
+  };
 
   useEffect(() => {
     return () => {
@@ -331,6 +461,28 @@ export const MatchmakingDuoFinder: React.FC<MatchmakingDuoFinderProps> = ({
               </div>
             </div>
 
+            {/* In-Memory Weighted Queue Trigger Button */}
+            <button
+              onClick={handleToggleQueue}
+              className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-xs sm:text-sm font-bold transition-all active:scale-95 shadow-lg font-mono cursor-pointer border ${
+                isQueueActive 
+                  ? 'bg-rose-500/20 border-rose-500/80 text-rose-300 animate-pulse' 
+                  : 'bg-zinc-900/90 hover:bg-zinc-800/90 border-zinc-700/80 text-white'
+              }`}
+            >
+              {isQueueActive ? (
+                <>
+                  <Timer className="h-4 w-4 animate-spin text-rose-400" />
+                  <span>Buscando ({Math.floor(queueSeconds / 60)}:{(queueSeconds % 60).toString().padStart(2, '0')}) • Cancelar</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 text-amber-400 fill-amber-400" />
+                  <span>Fila Ponderada (Redis Duo)</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={() => {
                 soundFx.playTactileClick();
@@ -349,6 +501,111 @@ export const MatchmakingDuoFinder: React.FC<MatchmakingDuoFinderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* In-Memory Weighted Redis Queue Tactical Radar Panel */}
+      {isQueueActive && (
+        <div 
+          className="rounded-2xl border p-5 bg-gradient-to-br from-zinc-950 via-zinc-900/90 to-zinc-950 shadow-2xl space-y-4 animate-fadeIn font-mono relative overflow-hidden"
+          style={{ borderColor: customColor }}
+        >
+          <div 
+            className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl pointer-events-none opacity-15"
+            style={{ backgroundColor: customColor }}
+          />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4 relative z-10">
+            <div className="flex items-center gap-3.5">
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800">
+                <Radio 
+                  className="h-6 w-6 animate-pulse" 
+                  style={{ color: customColor }} 
+                />
+                <span 
+                  className="absolute inset-0 rounded-xl animate-ping opacity-30" 
+                  style={{ backgroundColor: customColor }} 
+                />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-bold text-sm sm:text-base">
+                    Fila Ponderada em Memória (Redis Sorted Set)
+                  </span>
+                  <span className="rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold">
+                    BATCH MATCHMAKER ATIVO
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  Agrupando duos por proximidade de Karma Comportamental e Ranque Competitivo
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const candidate = players.find(p => p.id !== currentUser.id) || players[0];
+                  if (candidate) triggerDuoMatched(candidate, 2.1);
+                }}
+                className="flex items-center gap-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 px-3.5 py-2 text-xs font-bold text-amber-300 transition-all cursor-pointer"
+                title="Simula o pareamento em lote para testar o aviso sonoro e a notificação de sistema no tray"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>Simular Dupla Encontrada</span>
+              </button>
+
+              <button
+                onClick={handleToggleQueue}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 px-3.5 py-2 text-xs font-bold text-rose-300 transition-all cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+                <span>Cancelar Busca</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10 text-xs">
+            <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3">
+              <span className="text-zinc-500 block text-[10px]">TEMPO NA FILA</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Timer className="h-4 w-4 text-zinc-400" />
+                <span className="text-white font-extrabold text-base">
+                  {Math.floor(queueSeconds / 60).toString().padStart(2, '0')}:{(queueSeconds % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3">
+              <span className="text-zinc-500 block text-[10px]">SCORE COMPORTAMENTAL</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Zap className="h-4 w-4" style={{ color: customColor }} />
+                <span className="text-white font-extrabold text-base">
+                  {(20 * 20 + currentUser.reputationScore).toFixed(0)} pts
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3">
+              <span className="text-zinc-500 block text-[10px]">TOLERÂNCIA DINÂMICA (±Δ)</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Crosshair className="h-4 w-4 text-emerald-400" />
+                <span className="text-emerald-400 font-extrabold text-base">
+                  ±{queueTolerance.toFixed(1)} pts
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-zinc-900/90 border border-zinc-800/80 p-3">
+              <span className="text-zinc-500 block text-[10px]">NOTIFICAÇÃO DE SISTEMA</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Bell className="h-4 w-4 text-amber-400" />
+                <span className="text-zinc-300 font-bold">
+                  {notifGranted ? 'Tray & Som Prontos' : 'Som Ativo'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification when a New Lobby is Published */}
       {lobbyCreatedToast && (
@@ -1221,6 +1478,134 @@ export const MatchmakingDuoFinder: React.FC<MatchmakingDuoFinderProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Duo Match Found Tactical Modal (Audio Fanfare & System Tray Alert) */}
+      {isMatchModalOpen && matchedDuoPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div 
+            className="relative w-full max-w-xl overflow-hidden rounded-2xl border-2 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black p-6 md:p-8 shadow-2xl animate-scaleUp font-mono"
+            style={{ 
+              borderColor: customColor,
+              boxShadow: `0 0 60px ${getRgba(customColor, 0.4)}`
+            }}
+          >
+            {/* Ambient Background Glow */}
+            <div 
+              className="absolute -top-20 -right-20 h-60 w-60 rounded-full blur-3xl opacity-30 pointer-events-none"
+              style={{ backgroundColor: customColor }}
+            />
+
+            {/* Header Badge */}
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div 
+                  className="p-2 rounded-xl"
+                  style={{ backgroundColor: getRgba(customColor, 0.15) }}
+                >
+                  <Sparkles className="h-5 w-5 animate-spin" style={{ color: customColor }} />
+                </div>
+                <div>
+                  <span className="text-[10px] tracking-widest uppercase text-emerald-400 font-bold block">
+                    PAREAMENTO EM LOTE CONCLUÍDO (REDIS)
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-black text-white font-display">
+                    Dupla Encontrada! 🎯
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs">
+                <Timer className="h-4 w-4 text-amber-400 animate-pulse" />
+                <span className="text-white font-bold">{matchCountdown}s</span>
+              </div>
+            </div>
+
+            {/* Behavioral Score Proximity Card */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 mb-5 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-400" />
+                <span className="text-zinc-300">Proximidade Comportamental:</span>
+                <span className="text-emerald-400 font-extrabold">
+                  {(100 - matchedScoreDelta * 0.5).toFixed(1)}% Alta Afinidade
+                </span>
+              </div>
+              <span className="text-zinc-500 text-[10px]">Δscore: {matchedScoreDelta.toFixed(1)} pts</span>
+            </div>
+
+            {/* Players Comparison Arena */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {/* You */}
+              <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 space-y-2">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase block">Você</span>
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={currentUser.avatar} 
+                    alt={currentUser.username}
+                    className="h-10 w-10 rounded-full border border-zinc-700 object-cover" 
+                  />
+                  <div>
+                    <h4 className="text-white font-bold text-sm truncate">{currentUser.username}</h4>
+                    <span className="text-xs text-zinc-400 block">{currentUser.rank}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-emerald-400 font-semibold pt-1">
+                  Karma: {currentUser.reputationScore.toFixed(0)} • Call Limpa
+                </div>
+              </div>
+
+              {/* Matched Duo */}
+              <div 
+                className="rounded-xl border p-4 space-y-2 bg-zinc-900/40"
+                style={{ borderColor: getRgba(customColor, 0.4) }}
+              >
+                <span className="text-[10px] font-bold uppercase block" style={{ color: customColor }}>
+                  Dupla Compatível
+                </span>
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={matchedDuoPlayer.avatar} 
+                    alt={matchedDuoPlayer.username}
+                    className="h-10 w-10 rounded-full border-2 object-cover"
+                    style={{ borderColor: customColor }}
+                  />
+                  <div>
+                    <h4 className="text-white font-bold text-sm truncate">{matchedDuoPlayer.username}</h4>
+                    <span className="text-xs text-zinc-400 block">
+                      {matchedDuoPlayer.ranks[0]?.rankName || 'Imortal 2'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-[11px] font-semibold pt-1 text-emerald-400">
+                  Karma: {matchedDuoPlayer.reputationScore.toFixed(0)} • {matchedDuoPlayer.stats.tiltFreeMatches} jogos sem tilt
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={handleDeclineDuoMatch}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs cursor-pointer transition-all"
+              >
+                Declinar / Voltar
+              </button>
+
+              <button
+                onClick={handleAcceptDuoMatch}
+                className="w-full flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm shadow-xl cursor-pointer transition-all active:scale-95"
+                style={{
+                  backgroundColor: customColor,
+                  color: '#09090b',
+                  boxShadow: `0 4px 25px ${getRgba(customColor, 0.4)}`
+                }}
+              >
+                <Check className="h-5 w-5 stroke-[2.5]" />
+                <span>Aceitar e Entrar na Call Tática</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 pub mod matchmaking;
+pub mod queue;
 pub mod turn;
 pub mod ws;
 
@@ -7,7 +8,7 @@ pub use turn::TurnCredentialService;
 use crate::state::AppState;
 use axum::{
     extract::{Extension, Path, State},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use shared_types::auth::TokenClaims;
@@ -29,6 +30,10 @@ pub async fn get_lobby_rtc_config(
 pub fn lfg_routes() -> Router<AppState> {
     Router::new()
         .route("/search", get(matchmaking::search_duos))
+        .route("/queue/join", post(queue::join_queue_handler))
+        .route("/queue/leave", post(queue::leave_queue_handler))
+        .route("/queue/status", get(queue::get_queue_status_handler))
+        .route("/queue/batch-match", post(queue::batch_match_handler))
         .route("/lobbies/:id/ws", get(ws::ws_lobby_handler))
         .route("/lobbies/:id/rtc-config", get(get_lobby_rtc_config))
 }
