@@ -1,0 +1,18 @@
+name: CI Infrastructure
+on:
+  pull_request:
+    paths: ['infra/**', 'fly.toml', '.github/workflows/ci-infra.yml']
+  push:
+    branches: [main]
+    paths: ['infra/**', 'fly.toml', '.github/workflows/ci-infra.yml']
+permissions:
+  contents: read
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose
+        run: docker compose -f infra/docker/docker-compose.dev.yml config --quiet
+      - name: Validate NATS configuration
+        run: docker run --rm -v "$PWD/infra/docker/nats.conf:/etc/nats/nats.conf:ro" nats:2.10-alpine -t -c /etc/nats/nats.conf

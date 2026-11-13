@@ -84,7 +84,11 @@ pub mod commands {
     /// System Tray & OS Level Notification for Matchmaking Duo Discovery
     /// Requests critical user attention on taskbar/tray and triggers native OS toast notification
     #[tauri::command]
-    pub fn notify_match_found(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    pub fn notify_match_found(
+        app: tauri::AppHandle,
+        title: String,
+        body: String,
+    ) -> Result<(), String> {
         use tauri::Manager;
 
         // 1. Flash and demand user attention on Windows Taskbar / System Tray
@@ -114,7 +118,13 @@ $notifier.Show($notification);"#,
             );
 
             let _ = Command::new("powershell")
-                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_script])
+                .args([
+                    "-NoProfile",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-Command",
+                    &ps_script,
+                ])
                 .spawn();
         }
 

@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { FeedView } from './components/FeedView';
-import { ClipperEngine } from './components/ClipperEngine';
-import { PlayerProfileView } from './components/PlayerProfileView';
-import { MatchmakingDuoFinder } from './components/MatchmakingDuoFinder';
-import { TrustSystemView } from './components/TrustSystemView';
+const ClipperEngine = lazy(() => import('./components/ClipperEngine').then(m => ({ default: m.ClipperEngine })));
+const PlayerProfileView = lazy(() => import('./components/PlayerProfileView').then(m => ({ default: m.PlayerProfileView })));
+const MatchmakingDuoFinder = lazy(() => import('./components/MatchmakingDuoFinder').then(m => ({ default: m.MatchmakingDuoFinder })));
+const TrustSystemView = lazy(() => import('./components/TrustSystemView').then(m => ({ default: m.TrustSystemView })));
 import { ArenaTheaterModal } from './components/ArenaTheaterModal';
 import { PaletteCustomizerModal } from './components/modals/PaletteCustomizerModal';
 import { InviteDuoModal } from './components/modals/InviteDuoModal';
@@ -158,6 +158,7 @@ function MainApp() {
   return (
     <div className="min-h-screen bg-zinc-950 bg-tactical-grid text-zinc-100 flex flex-col font-sans">
       
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:p-3 focus:bg-zinc-800">Pular para o conteúdo</a>
       {/* Top Navbar with Palette Picker Control */}
       <Navbar
         activeTab={activeTab}
@@ -168,7 +169,17 @@ function MainApp() {
       />
 
       {/* Main View Router */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
+        <section aria-label="Guia de demonstração" className="mx-auto max-w-7xl p-4 text-sm">
+          <p className="text-amber-300">Protótipo demonstrativo • Feed e perfis utilizam dados de exemplo.</p>
+          <p className="text-zinc-400 mt-1">Explore clipes, encontre uma dupla e consulte a reputação. Captura real exige o aplicativo Windows e validação no jogo.</p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button className="rounded-lg bg-zinc-800 px-4 py-2" onClick={() => setActiveTab('clipper')}>1. Explorar captura</button>
+            <button className="rounded-lg bg-zinc-800 px-4 py-2" onClick={() => setActiveTab('duos')}>2. Encontrar dupla</button>
+            <button className="rounded-lg bg-zinc-800 px-4 py-2" onClick={() => setActiveTab('trust')}>3. Entender reputação</button>
+          </div>
+        </section>
+        <Suspense fallback={<p role="status" className="p-8 text-center">Carregando tela…</p>}>
         {activeTab === 'feed' && (
           <FeedView
             clips={clips}
@@ -224,6 +235,7 @@ function MainApp() {
         )}
 
         {activeTab === 'trust' && <TrustSystemView />}
+        </Suspense>
       </main>
 
       {/* Footer */}
@@ -250,7 +262,7 @@ function MainApp() {
               <span>Paleta: {themeConfig.label}</span>
             </button>
             <span className="text-zinc-600">|</span>
-            <span>Telemetry Engine v4.2 Online</span>
+            <span>Ambiente de demonstração</span>
           </div>
         </div>
       </footer>

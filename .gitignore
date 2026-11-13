@@ -1,11 +1,9 @@
 # Dependencies & Package Managers
 node_modules/
 .pnpm-store/
-package-lock.json
 
 # Rust Target & Builds
 target/
-Cargo.lock
 
 # Environment Variables & Secrets
 .env

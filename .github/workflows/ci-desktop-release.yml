@@ -27,15 +27,18 @@ jobs:
 
       - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
 
       - name: Install Frontend Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Tauri Desktop Bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: apps/desktop
           tagName: v__VERSION__
           releaseName: 'We Space v__VERSION__'
           releaseBody: 'Melhorias de desempenho no Ring Buffer e compatibilidade anti-cheat.'
