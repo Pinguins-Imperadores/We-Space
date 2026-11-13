@@ -3,6 +3,7 @@
 ## Causas encontradas e alterações
 
 - `cargo fmt --all -- --check` falhava em lib.rs do desktop, queue.rs e lfg.rs. Aplicado rustfmt ao workspace.
+- Após a formatação, a compilação revelou duas chamadas incompatíveis com fred 8 na fila: removido argumento extra de zrank e usado None no parâmetro de ordenação de zrange. A consulta permanece ascendente por índice, com scores.
 - Rust 1.100 do canal stable apresentou erro de inferência de tipo dentro do SQLx 0.7.4. Fixado Rust 1.95.0 em rust-toolchain.toml, workflows e imagem de compilação Docker; Cargo.lock passa a ser versionado.
 - CI frontend passa a instalar com npm ci e executar os testes Node; mudanças nos testes também disparam o workflow.
 - CI backend considera alterações do desktop, lockfile, toolchain e do próprio workflow.
@@ -17,6 +18,9 @@
 ## Verificações executadas
 
 - Rustfmt aprovado.
+- Clippy backend e shared-types aprovado com `-D warnings` em Rust 1.95.0.
+- 18 testes Rust aprovados: 9 do backend e 9 de tipos compartilhados; doc-tests também passaram.
+- GitHub Actions do PR #7: check-and-test e Gitleaks aprovados.
 - TypeScript dos dois pacotes compartilhados aprovado.
 - 9 testes Node aprovados.
 - Builds Vite desktop e PWA aprovados.
@@ -28,4 +32,6 @@
 
 Não houve deploy de produção, teste de tráfego WebRTC entre redes externas, build Windows ou assinatura Authenticode. A imagem Docker da API não foi compilada integralmente nesta rodada. A subida de serviços não equivale a teste de integração ponta a ponta.
 
-PR centralizador: https://github.com/Pinguins-Imperadores/We-Space/pull/6. Os resultados finais de Clippy e testes Rust devem ser conferidos nos checks desse PR antes da integração.
+PR centralizador integrado: https://github.com/Pinguins-Imperadores/We-Space/pull/6. Correção complementar das chamadas Redis: https://github.com/Pinguins-Imperadores/We-Space/pull/7.
+
+SQLx 0.7.4 ainda emite aviso de incompatibilidade futura com Rust. A versão fixa estabiliza o build atual; atualizar SQLx requer uma migração própria. Os 18 testes Rust executados cobrem backend e tipos compartilhados, não os módulos nativos Windows do desktop.
