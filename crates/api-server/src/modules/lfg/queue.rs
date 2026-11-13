@@ -271,7 +271,7 @@ pub async fn get_queue_status_handler(
     let total: usize = state.redis.zcard(queue_key.clone()).await.unwrap_or(0);
     let rank_opt: Option<usize> = state
         .redis
-        .zrank(queue_key, user_id_str, false)
+        .zrank(queue_key, user_id_str)
         .await
         .unwrap_or(None);
 
@@ -309,7 +309,7 @@ pub async fn run_batch_matchmaking(
 
     // 1. Fetch all queued players ordered by weighted score (ZRANGE 0 -1 WITHSCORES)
     let entries: Vec<(String, f64)> = redis
-        .zrange(queue_key.clone(), 0, -1, false, false, None, true)
+        .zrange(queue_key.clone(), 0, -1, None, false, None, true)
         .await
         .unwrap_or_default();
 
