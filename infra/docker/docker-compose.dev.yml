@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_secret_pass_change_me}
       POSTGRES_DB: wespace_core
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     command: >
       postgres
       -c shared_buffers=256MB
@@ -31,11 +29,11 @@ services:
     container_name: wespace-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: >
       redis-server
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --appendonly yes
       --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
     volumes:
@@ -51,25 +49,20 @@ services:
     container_name: wespace-nats
     restart: unless-stopped
     ports:
-      - "4222:4222"   # Clients
-      - "8222:8222"   # Management & Metrics
-    command: >
-      -js
-      -sd /data/jetstream
-      -m 8222
-      --max_payload 2MB
-      --max_mem_store 256MB
-      --max_file_store 2GB
+      - "127.0.0.1:4222:4222"   # Clients
+      - "127.0.0.1:8222:8222"   # Management & Metrics
+    command: ["-c", "/etc/nats/nats.conf"]
     volumes:
       - nats_data:/data/jetstream
+      - ./nats.conf:/etc/nats/nats.conf:ro
 
   minio:
     image: minio/minio:latest
     container_name: wespace-minio-r2-mock
     restart: unless-stopped
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Console
+      - "127.0.0.1:9000:9000"   # S3 API
+      - "127.0.0.1:9001:9001"   # Console
     environment:
       MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-dev_access_key}
       MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-dev_secret_access_key}
@@ -81,11 +74,11 @@ services:
     image: coturn/coturn:4.6-alpine
     container_name: wespace-coturn
     restart: unless-stopped
+    command: ["-c", "/etc/coturn/turnserver.conf", "--no-tls", "--no-dtls", "--pidfile=/tmp/turnserver.pid"]
     ports:
       - "3478:3478/tcp"
       - "3478:3478/udp"
-      - "5349:5349/tcp"
-      - "5349:5349/udp"
+      - "49160-49200:49160-49200/udp"
     volumes:
       - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
 

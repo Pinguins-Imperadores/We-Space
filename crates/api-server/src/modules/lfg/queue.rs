@@ -64,9 +64,7 @@ pub async fn join_queue_handler(
     claims: Option<Extension<TokenClaims>>,
     Json(payload): Json<JoinQueueRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let user_id = claims
-        .map(|c| c.0.sub)
-        .unwrap_or_else(Uuid::new_v4);
+    let user_id = claims.map(|c| c.0.sub).unwrap_or_else(Uuid::new_v4);
 
     // Fetch user details & karma from PostgreSQL if available
     let user_row = sqlx::query(
@@ -96,8 +94,12 @@ pub async fn join_queue_handler(
         (
             r.get::<String, _>("username"),
             r.get::<f32, _>("karma_score"),
-            payload.rank_tier.unwrap_or_else(|| r.get::<i16, _>("rank_tier")),
-            payload.primary_role.unwrap_or_else(|| r.get::<String, _>("primary_role")),
+            payload
+                .rank_tier
+                .unwrap_or_else(|| r.get::<i16, _>("rank_tier")),
+            payload
+                .primary_role
+                .unwrap_or_else(|| r.get::<String, _>("primary_role")),
         )
     } else {
         (
@@ -117,7 +119,9 @@ pub async fn join_queue_handler(
         game: payload.game,
         rank_tier,
         primary_role,
-        comm_preferences: payload.comm_preferences.unwrap_or_else(|| vec![CommStyle::CleanCalls]),
+        comm_preferences: payload
+            .comm_preferences
+            .unwrap_or_else(|| vec![CommStyle::CleanCalls]),
         karma_score,
         joined_at: now,
         weighted_score,
@@ -203,15 +207,17 @@ pub async fn leave_queue_handler(
     claims: Option<Extension<TokenClaims>>,
     Json(payload): Json<Option<LeaveQueueRequest>>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let user_id = claims
-        .map(|c| c.0.sub)
-        .unwrap_or_else(Uuid::new_v4);
+    let user_id = claims.map(|c| c.0.sub).unwrap_or_else(Uuid::new_v4);
 
     let player_map_key = format!("{}:{}", PLAYER_MAP_PREFIX, user_id);
     let game_title = if let Some(p) = payload {
         p.game
     } else {
-        let stored_game: Option<String> = state.redis.get(player_map_key.clone()).await.unwrap_or(None);
+        let stored_game: Option<String> = state
+            .redis
+            .get(player_map_key.clone())
+            .await
+            .unwrap_or(None);
         stored_game
             .map(|s| game_from_str(&s))
             .unwrap_or(GameTitle::Valorant)
@@ -238,9 +244,7 @@ pub async fn get_queue_status_handler(
     State(state): State<AppState>,
     claims: Option<Extension<TokenClaims>>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let user_id = claims
-        .map(|c| c.0.sub)
-        .unwrap_or_else(Uuid::new_v4);
+    let user_id = claims.map(|c| c.0.sub).unwrap_or_else(Uuid::new_v4);
 
     let player_map_key = format!("{}:{}", PLAYER_MAP_PREFIX, user_id);
     let stored_game: Option<String> = state.redis.get(player_map_key).await.unwrap_or(None);
@@ -265,7 +269,11 @@ pub async fn get_queue_status_handler(
     let user_id_str = user_id.to_string();
 
     let total: usize = state.redis.zcard(queue_key.clone()).await.unwrap_or(0);
-    let rank_opt: Option<usize> = state.redis.zrank(queue_key, user_id_str, false).await.unwrap_or(None);
+    let rank_opt: Option<usize> = state
+        .redis
+        .zrank(queue_key, user_id_str, false)
+        .await
+        .unwrap_or(None);
 
     let ticket_json: Option<String> = state.redis.get(ticket_key).await.unwrap_or(None);
     let ticket: Option<QueueTicket> = ticket_json.and_then(|s| serde_json::from_str(&s).ok());
@@ -451,7 +459,9 @@ pub async fn run_batch_matchmaking(
 
     // Atomically remove all matched players from the Redis Sorted Set
     if !matched_user_ids.is_empty() {
-        let _: Result<i64, _> = redis.zrem(queue_key.clone(), matched_user_ids.clone()).await;
+        let _: Result<i64, _> = redis
+            .zrem(queue_key.clone(), matched_user_ids.clone())
+            .await;
 
         for uid in &matched_user_ids {
             let ticket_key = format!("{}:{}", TICKET_KEY_PREFIX, uid);
@@ -531,7 +541,10 @@ mod tests {
 
     #[test]
     fn test_queue_key_generation() {
-        assert_eq!(queue_key_for_game(GameTitle::Valorant), "lfg:queue:VALORANT");
+        assert_eq!(
+            queue_key_for_game(GameTitle::Valorant),
+            "lfg:queue:VALORANT"
+        );
         assert_eq!(queue_key_for_game(GameTitle::Cs2), "lfg:queue:CS2");
         assert_eq!(queue_key_for_game(GameTitle::Lol), "lfg:queue:LOL");
     }
@@ -548,7 +561,13 @@ mod tests {
         let initial_tol = calculate_dynamic_tolerance(0); // 15.0
         let max_tol = calculate_dynamic_tolerance(100); // 65.0
 
-        assert!(delta_close <= initial_tol, "Close peers must match immediately");
-        assert!(delta_far > max_tol, "Divergent ranks must never match outside max tolerance");
+        assert!(
+            delta_close <= initial_tol,
+            "Close peers must match immediately"
+        );
+        assert!(
+            delta_far > max_tol,
+            "Divergent ranks must never match outside max tolerance"
+        );
     }
 }

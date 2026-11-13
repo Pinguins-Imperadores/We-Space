@@ -1,5 +1,5 @@
 # Multi-Stage Build for We Space API (Fly.io GRU target)
-FROM rust:1.80-alpine AS builder
+FROM rust:1.95-alpine AS builder
 
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static pkgconfig make
 
@@ -29,6 +29,7 @@ RUN cargo build --release --bin wespace-api
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata libssl3
+RUN addgroup -S wespace && adduser -S -G wespace wespace
 
 WORKDIR /app
 
@@ -40,5 +41,7 @@ ENV PORT=8080
 ENV RUST_LOG=info,wespace_api=debug,tower_http=info
 
 EXPOSE 8080
+
+USER wespace
 
 CMD ["/app/wespace-api"]

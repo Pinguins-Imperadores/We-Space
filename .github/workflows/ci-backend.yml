@@ -5,13 +5,20 @@ on:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'apps/desktop/src-tauri/**'
       - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
       - '.github/workflows/ci-backend.yml'
   pull_request:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'apps/desktop/src-tauri/**'
+      - '.github/workflows/ci-backend.yml'
       - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
 
 jobs:
   check-and-test:
@@ -22,6 +29,7 @@ jobs:
       - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: '1.95.0'
           components: clippy, rustfmt
 
       - name: Rust Cache

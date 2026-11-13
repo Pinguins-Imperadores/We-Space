@@ -165,7 +165,8 @@ mod tests {
         };
 
         let serialized = serde_json::to_string(&ticket).expect("Serialization failed");
-        let deserialized: QueueTicket = serde_json::from_str(&serialized).expect("Deserialization failed");
+        let deserialized: QueueTicket =
+            serde_json::from_str(&serialized).expect("Deserialization failed");
 
         assert_eq!(ticket.user_id, deserialized.user_id);
         assert_eq!(ticket.username, deserialized.username);

@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/**'
       - 'packages/**'
+      - 'tests/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ci-frontend.yml'
@@ -14,6 +15,8 @@ on:
     paths:
       - 'apps/**'
       - 'packages/**'
+      - 'tests/**'
+      - '.github/workflows/ci-frontend.yml'
       - 'package.json'
       - 'package-lock.json'
 
@@ -29,7 +32,10 @@ jobs:
           node-version: 22
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Run Regression Tests
+        run: npm test
 
       - name: Build Shared Packages
         run: |

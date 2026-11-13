@@ -4,7 +4,6 @@ node_modules/
 
 # Rust Target & Builds
 target/
-Cargo.lock
 
 # Environment Variables & Secrets
 .env
