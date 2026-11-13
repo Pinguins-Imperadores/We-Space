@@ -115,7 +115,7 @@ export default function App() {
     setInvites((prev) =>
       prev.map((inv) => (inv.id === id ? { ...inv, accepted: true } : inv))
     );
-    showToast(`Convite de ${hostName} aceito! Conectando à sala de voz WebRTC...`);
+    showToast(`Convite de ${hostName} aceito na demonstração. Áudio real ainda não conectado.`);
   };
 
   const handleDeclineInvite = (id: string) => {
@@ -240,7 +240,7 @@ export default function App() {
             <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
               <span>Feed de Clipes Verificados</span>
               <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Telemetria GPU Ativa
+                <Sparkles className="w-3.5 h-3.5" /> Dados de demonstração
               </span>
             </div>
 

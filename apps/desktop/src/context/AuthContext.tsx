@@ -27,8 +27,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('wespace_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('wespace_user');
+      const parsed = saved ? JSON.parse(saved) : null;
+      return parsed && typeof parsed.id === 'string' && typeof parsed.username === 'string' ? parsed : null;
+    } catch {
+      return null;
+    }
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('wespace_access_token'));
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(true);
@@ -70,20 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsOfflineMode(false);
       closeAuthModal();
     } catch (err) {
-      if (isOfflineMode) {
-        // In offline mode, allow guest login for local demonstration
-        const guestUser: User = {
-          id: 'dev-guest-001',
-          username: usernameOrEmail || 'GamerLocal',
-          role: 'PLAYER',
-          karma: 110.5,
-        };
-        setUser(guestUser);
-        localStorage.setItem('wespace_user', JSON.stringify(guestUser));
-        closeAuthModal();
-      } else {
-        throw err;
-      }
+      throw err;
     }
   };
 
@@ -102,19 +94,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsOfflineMode(false);
       closeAuthModal();
     } catch (err) {
-      if (isOfflineMode) {
-        const guestUser: User = {
-          id: 'dev-guest-002',
-          username,
-          role: 'PLAYER',
-          karma: 100.0,
-        };
-        setUser(guestUser);
-        localStorage.setItem('wespace_user', JSON.stringify(guestUser));
-        closeAuthModal();
-      } else {
-        throw err;
-      }
+      throw err;
     }
   };
 
@@ -132,7 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       value={{
         user,
         token,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user && !!token,
         isOfflineMode,
         isAuthModalOpen,
         openAuthModal,

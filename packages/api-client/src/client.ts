@@ -15,8 +15,7 @@ export class WeSpaceApiClient {
   private baseUrl: string;
   private token: string | null = null;
   private refreshToken: string | null = null;
-  private isRefreshing: boolean = false;
-  private refreshSubscribers: ((token: string) => void)[] = [];
+  private refreshPromise: Promise<string | null> | null = null;
 
   constructor(baseUrl: string = 'http://127.0.0.1:8080/api/v1') {
     this.baseUrl = baseUrl;
@@ -55,15 +54,6 @@ export class WeSpaceApiClient {
     return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   }
 
-  private onTokenRefreshed(token: string) {
-    this.refreshSubscribers.forEach((cb) => cb(token));
-    this.refreshSubscribers = [];
-  }
-
-  private addRefreshSubscriber(cb: (token: string) => void) {
-    this.refreshSubscribers.push(cb);
-  }
-
   private async trySilentRefresh(): Promise<string | null> {
     if (!this.refreshToken) {
       return null;
@@ -74,6 +64,7 @@ export class WeSpaceApiClient {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: this.refreshToken }),
+        signal: AbortSignal.timeout(6000),
       });
 
       if (!res.ok) {
@@ -89,7 +80,7 @@ export class WeSpaceApiClient {
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}, allowRefresh = true): Promise<T> {
     const headers = new Headers(options.headers || {});
     headers.set('Content-Type', 'application/json');
     if (this.token) {
@@ -109,43 +100,16 @@ export class WeSpaceApiClient {
       clearTimeout(timeoutId);
 
       // Silent refresh interceptor on 401 Unauthorized
-      if (res.status === 401 && this.refreshToken && !endpoint.includes('/auth/')) {
-        if (!this.isRefreshing) {
-          this.isRefreshing = true;
-          const newToken = await this.trySilentRefresh();
-          this.isRefreshing = false;
-
-          if (newToken) {
-            this.onTokenRefreshed(newToken);
-            headers.set('Authorization', `Bearer ${newToken}`);
-            const retryRes = await fetch(`${this.baseUrl}${endpoint}`, {
-              ...options,
-              headers,
-            });
-            if (retryRes.ok) {
-              return retryRes.json();
-            }
-          }
-        } else {
-          // Queue request until refresh finishes
-          return new Promise<T>((resolve, reject) => {
-            this.addRefreshSubscriber(async (newToken) => {
-              headers.set('Authorization', `Bearer ${newToken}`);
-              try {
-                const retryRes = await fetch(`${this.baseUrl}${endpoint}`, {
-                  ...options,
-                  headers,
-                });
-                if (retryRes.ok) {
-                  resolve(await retryRes.json());
-                } else {
-                  reject(new Error('Retry failed after token refresh'));
-                }
-              } catch (err) {
-                reject(err);
-              }
-            });
+      if (allowRefresh && res.status === 401 && this.refreshToken && !endpoint.includes('/auth/')) {
+        if (!this.refreshPromise) {
+          this.refreshPromise = this.trySilentRefresh().finally(() => {
+            this.refreshPromise = null;
           });
+        }
+        const newToken = await this.refreshPromise;
+        if (newToken) {
+          // Retry once with the normal timeout; never recursively refresh.
+          return this.request<T>(endpoint, options, false);
         }
       }
 
@@ -154,7 +118,7 @@ export class WeSpaceApiClient {
         throw new Error(errorJson.message || `API error ${res.status}`);
       }
 
-      return res.json();
+      return res.status === 204 ? undefined as T : res.json();
     } catch (err) {
       clearTimeout(timeoutId);
       throw err;
