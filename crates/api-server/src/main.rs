@@ -153,14 +153,20 @@ async fn main() -> anyhow::Result<()> {
     // 6. Router Assembly
     let api_routes = Router::new()
         .route("/healthcheck", get(healthcheck))
-        .route("/metrics", get(crate::middleware::prometheus_metrics_handler))
+        .route(
+            "/metrics",
+            get(crate::middleware::prometheus_metrics_handler),
+        )
         .nest("/auth", auth_routes())
         .nest("/lfg", lfg_routes())
         .nest("/clips", clips_routes())
         .nest("/reputation", reputation_routes());
 
     let app = Router::new()
-        .route("/metrics", get(crate::middleware::prometheus_metrics_handler))
+        .route(
+            "/metrics",
+            get(crate::middleware::prometheus_metrics_handler),
+        )
         .nest("/api/v1", api_routes)
         .layer(cors)
         .layer(axum::middleware::from_fn(

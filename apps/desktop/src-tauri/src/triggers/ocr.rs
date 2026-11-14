@@ -77,7 +77,9 @@ impl FastRoiOcr {
             return false;
         }
 
-        let expected_bytes = (width as usize).saturating_mul(height as usize).saturating_mul(4);
+        let expected_bytes = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(4);
         if rgba_pixels.len() < expected_bytes {
             return false;
         }
@@ -216,4 +218,3 @@ mod tests {
         assert!(!ocr.detect_kill_banner(&[255; 100], 1920, 0));
     }
 }
-

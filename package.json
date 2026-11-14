@@ -15,8 +15,8 @@
     "tauri:build": "npm run --prefix apps/desktop tauri build",
     "docker:dev": "docker compose -f infra/docker/docker-compose.dev.yml up -d",
     "docker:down": "docker compose -f infra/docker/docker-compose.dev.yml down",
-    "test": "node --test tests/**/*.test.mjs",
-    "test:unit": "node --test tests/**/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:unit": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "typescript": "~5.8.2"

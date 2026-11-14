@@ -22,7 +22,10 @@ test('Observabilidade: Axum expõe /metrics e middleware de telemetria Prometheu
   assert.ok(telemetryRs.includes('pub async fn prometheus_metrics_handler'));
   assert.ok(telemetryRs.includes('text/plain; version=0.0.4; charset=utf-8'));
 
-  assert.ok(mainRs.includes('.route("/metrics", get(crate::middleware::prometheus_metrics_handler))'));
+  assert.ok(
+    mainRs.includes('.route("/metrics", get(crate::middleware::prometheus_metrics_handler))') ||
+    (mainRs.includes('"/metrics"') && mainRs.includes('get(crate::middleware::prometheus_metrics_handler)'))
+  );
   assert.ok(mainRs.includes('crate::middleware::prometheus_metrics_middleware'));
 });
 

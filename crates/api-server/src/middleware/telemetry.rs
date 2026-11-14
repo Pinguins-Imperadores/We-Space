@@ -93,7 +93,10 @@ pub async fn prometheus_metrics_middleware(req: Request<Body>, next: Next) -> Re
 /// Handler for `GET /metrics` and `GET /api/v1/metrics` scraped by Prometheus / Fly.io Grafana.
 pub async fn prometheus_metrics_handler() -> impl IntoResponse {
     let body = render_prometheus_metrics();
-    let content_type = (header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8");
+    let content_type = (
+        header::CONTENT_TYPE,
+        "text/plain; version=0.0.4; charset=utf-8",
+    );
     (StatusCode::OK, [content_type], body)
 }
 

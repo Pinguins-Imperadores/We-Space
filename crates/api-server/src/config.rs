@@ -133,4 +133,3 @@ mod tests {
         env::remove_var("JWT_PRIVATE_KEY");
     }
 }
-
