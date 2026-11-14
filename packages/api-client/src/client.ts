@@ -11,13 +11,37 @@ import {
   BatchMatchmakingResponse,
 } from './schemas';
 
+export function resolveDefaultApiBaseUrl(hostname?: string, envBaseUrl?: string): string {
+  if (envBaseUrl && envBaseUrl.trim().length > 0) {
+    return envBaseUrl.trim().replace(/\/+$/, '');
+  }
+
+  const host =
+    hostname ??
+    (typeof window !== 'undefined' &&
+    window.location &&
+    typeof window.location.hostname === 'string'
+      ? window.location.hostname
+      : '');
+
+  if (
+    host === 'app.wespace.gg' ||
+    host === 'wespace.gg' ||
+    host.endsWith('.wespace.gg')
+  ) {
+    return 'https://api.wespace.gg/api/v1';
+  }
+
+  return 'http://127.0.0.1:8080/api/v1';
+}
+
 export class WeSpaceApiClient {
   private baseUrl: string;
   private token: string | null = null;
   private refreshToken: string | null = null;
   private refreshPromise: Promise<string | null> | null = null;
 
-  constructor(baseUrl: string = 'http://127.0.0.1:8080/api/v1') {
+  constructor(baseUrl: string = resolveDefaultApiBaseUrl()) {
     this.baseUrl = baseUrl;
     // Attempt to load cached token from localStorage if available
     if (typeof window !== 'undefined') {

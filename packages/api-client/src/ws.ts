@@ -1,5 +1,29 @@
 export type WebSocketMessageHandler = (data: Record<string, unknown>) => void;
 
+export function resolveDefaultWsUrl(hostname?: string, envWsUrl?: string): string {
+  if (envWsUrl && envWsUrl.trim().length > 0) {
+    return envWsUrl.trim();
+  }
+
+  const host =
+    hostname ??
+    (typeof window !== 'undefined' &&
+    window.location &&
+    typeof window.location.hostname === 'string'
+      ? window.location.hostname
+      : '');
+
+  if (
+    host === 'app.wespace.gg' ||
+    host === 'wespace.gg' ||
+    host.endsWith('.wespace.gg')
+  ) {
+    return 'wss://api.wespace.gg/api/v1/lfg/ws';
+  }
+
+  return 'ws://127.0.0.1:8080/api/v1/lfg/ws';
+}
+
 export class WeSpaceWebSocketClient {
   private url: string;
   private ws: WebSocket | null = null;
@@ -9,7 +33,7 @@ export class WeSpaceWebSocketClient {
   private handlers: Map<string, WebSocketMessageHandler[]> = new Map();
   private isExplicitlyClosed: boolean = false;
 
-  constructor(url: string) {
+  constructor(url: string = resolveDefaultWsUrl()) {
     this.url = url;
   }
 

@@ -1,0 +1,57 @@
+{
+  "title": "We Space — Axum API & Matchmaking Telemetry (GRU)",
+  "uid": "wespace-axum-prod",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API Instance Health (GRU)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "wespace_up{service=\"wespace-api\"}",
+          "legendFormat": "{{region}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP Throughput (req/s)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(wespace_http_requests_total[1m])",
+          "legendFormat": "Total req/s"
+        },
+        {
+          "expr": "rate(wespace_http_errors_total[1m])",
+          "legendFormat": "4xx/5xx Errors/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Average HTTP Latency (ms)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(wespace_http_request_duration_ms_sum[1m]) / clamp_min(rate(wespace_http_request_duration_ms_count[1m]), 1)",
+          "legendFormat": "Avg Latency (ms)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Requests by Domain Module (Auth / LFG / Clips / Reputation)",
+      "type": "barchart",
+      "targets": [
+        {
+          "expr": "wespace_module_requests_total",
+          "legendFormat": "{{module}}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+name: CI Backend (Rust Axum & SQLx)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'apps/desktop/src-tauri/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/ci-backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'apps/desktop/src-tauri/**'
+      - '.github/workflows/ci-backend.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+
+jobs:
+  check-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          components: clippy, rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Cargo Check Backend
+        run: cargo check -p wespace-api -p wespace-shared-types
+
+      - name: Run Clippy
+        run: cargo clippy -p wespace-api -p wespace-shared-types -- -D warnings
+
+      - name: Run Backend Tests
+        run: cargo test -p wespace-api -p wespace-shared-types

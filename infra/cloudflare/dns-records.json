@@ -1,0 +1,37 @@
+{
+  "zone": "wespace.gg",
+  "records": [
+    {
+      "type": "CNAME",
+      "name": "api.wespace.gg",
+      "content": "wespace-api-prod.fly.dev",
+      "proxied": false,
+      "ttl": 1,
+      "comment": "We Space Rust/Axum API Monolith on Fly.io (GRU - São Paulo)"
+    },
+    {
+      "type": "CNAME",
+      "name": "app.wespace.gg",
+      "content": "wespace-pwa.pages.dev",
+      "proxied": true,
+      "ttl": 1,
+      "comment": "We Space Web Portal & Progressive Web App on Cloudflare Pages"
+    },
+    {
+      "type": "A",
+      "name": "turn.wespace.gg",
+      "content": "${COTURN_SA_PUBLIC_IP}",
+      "proxied": false,
+      "ttl": 120,
+      "comment": "We Space Coturn STUN/TURN Relay VM in South America (DNS-Only required for UDP 3478 & 49160-49200)"
+    },
+    {
+      "type": "CNAME",
+      "name": "cdn.wespace.gg",
+      "content": "public.r2.wespace.gg",
+      "proxied": true,
+      "ttl": 1,
+      "comment": "We Space Cloudflare R2 Verified Highlight Clips Edge CDN"
+    }
+  ]
+}

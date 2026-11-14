@@ -1,0 +1,42 @@
+name: Deploy API to Fly.io (GRU Production)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-fly:
+    name: Fly.io Production Deploy (São Paulo - GRU)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Sync RSA Private Key Secret (JWT_PRIVATE_KEY_PEM)
+        if: ${{ secrets.FLY_API_TOKEN != '' && secrets.JWT_PRIVATE_KEY_PEM != '' }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          JWT_PRIVATE_KEY_PEM: ${{ secrets.JWT_PRIVATE_KEY_PEM }}
+          JWT_PUBLIC_KEY_PEM: ${{ secrets.JWT_PUBLIC_KEY_PEM }}
+        run: |
+          flyctl secrets set \
+            JWT_PRIVATE_KEY_PEM="$JWT_PRIVATE_KEY_PEM" \
+            ${JWT_PUBLIC_KEY_PEM:+JWT_PUBLIC_KEY_PEM="$JWT_PUBLIC_KEY_PEM"} \
+            --app wespace-api-prod \
+            --stage
+
+      - name: Deploy We Space API to Fly.io (GRU)
+        if: ${{ secrets.FLY_API_TOKEN != '' }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --config fly.toml --app wespace-api-prod

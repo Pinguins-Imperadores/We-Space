@@ -1,10 +1,12 @@
 pub mod auth_guard;
 pub mod rate_limiter;
 pub mod sanitize;
+pub mod telemetry;
 
 pub use auth_guard::auth_guard;
 pub use rate_limiter::rate_limit_middleware;
 pub use sanitize::*;
+pub use telemetry::{prometheus_metrics_handler, prometheus_metrics_middleware};
 
 use axum::{
     body::Body,

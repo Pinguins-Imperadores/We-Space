@@ -7,8 +7,13 @@ kill_timeout = "15s"
   dockerfile = "infra/docker/Dockerfile.api"
 
 [env]
+  APP_ENV = "production"
   RUST_LOG = "info,wespace_api=debug,tower_http=info"
   PORT = "8080"
+  # Required Fly.io runtime secrets (set via `fly secrets set`):
+  # - JWT_PRIVATE_KEY_PEM (RSA 2048/4096 Private Key in PEM format for RS256 signing)
+  # - JWT_PUBLIC_KEY_PEM  (RSA Public Key in PEM format for RS256 verification)
+  # - DATABASE_URL, REDIS_URL, NATS_URL, TURN_HMAC_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 
 [http_service]
   internal_port = 8080
@@ -32,3 +37,7 @@ kill_timeout = "15s"
 [[vm]]
   size = "shared-cpu-2x"
   memory = "1gb"
+
+[metrics]
+  port = 8080
+  path = "/metrics"

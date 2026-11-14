@@ -43,6 +43,7 @@ impl TurnCredentialService {
         let stun_url = format!("stun:{}:{}", self.turn_host, self.turn_port);
         let turn_udp_url = format!("turn:{}:{}?transport=udp", self.turn_host, self.turn_port);
         let turn_tcp_url = format!("turn:{}:{}?transport=tcp", self.turn_host, self.turn_port);
+        let turns_tls_url = format!("turns:{}:5349?transport=tcp", self.turn_host);
 
         let ice_servers = vec![
             RtcIceServer {
@@ -51,7 +52,7 @@ impl TurnCredentialService {
                 credential: None,
             },
             RtcIceServer {
-                urls: vec![turn_udp_url, turn_tcp_url],
+                urls: vec![turn_udp_url, turn_tcp_url, turns_tls_url],
                 username: Some(username),
                 credential: Some(credential),
             },
@@ -88,10 +89,12 @@ mod tests {
         assert!(stun.username.is_none());
         assert!(stun.credential.is_none());
 
-        // 2. Verify TURN entry with HMAC-SHA1
+        // 2. Verify TURN entry with HMAC-SHA1 (UDP, TCP and TLS 5349 fallback for strict firewalls/CG-NAT)
         let turn = &config.ice_servers[1];
-        assert_eq!(turn.urls.len(), 2);
+        assert_eq!(turn.urls.len(), 3);
         assert!(turn.urls[0].starts_with("turn:turn.wespace.gg:3478?transport=udp"));
+        assert!(turn.urls[1].starts_with("turn:turn.wespace.gg:3478?transport=tcp"));
+        assert!(turn.urls[2].starts_with("turns:turn.wespace.gg:5349?transport=tcp"));
 
         let username = turn.username.as_ref().expect("Username must exist");
         let credential = turn.credential.as_ref().expect("Credential must exist");
