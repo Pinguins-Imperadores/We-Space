@@ -20,12 +20,12 @@ serde_json = "1.0"
 tokio = { version = "1.38", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.8", features = ["v4", "serde"] }
-sha2 = "0.10"
-hmac = "0.12"
+sha2 = "0.11"
+hmac = "0.13"
 ring = "0.17"
 hex = "0.4"
-keyring = "2.1"
-thiserror = "1.0"
+keyring = "4.2"
+thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 shared-types = { package = "wespace-shared-types", path = "../../../crates/shared-types" }
