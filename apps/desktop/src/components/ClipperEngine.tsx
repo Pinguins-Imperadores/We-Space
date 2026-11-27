@@ -24,11 +24,12 @@ import confetti from 'canvas-confetti';
 import { OngoingMatchLog, GameType, MatchEvent, Clip } from '../types';
 import { useAtmosphere, getRgba, isLightColor } from '../context/ThemeAtmosphereContext';
 import { soundFx } from '@wespace/ui';
-import { useNativeClipper } from '../hooks/useNativeClipper';
+import { useAutoClipper } from '../context/AutoClipperContext';
 
 interface ClipperEngineProps {
   matchLogs: OngoingMatchLog[];
   onPublishClip: (newClip: Clip) => void;
+  onOpenClipperSettings?: () => void;
   currentUser: {
     id: string;
     username: string;
@@ -42,14 +43,24 @@ interface ClipperEngineProps {
 export const ClipperEngine: React.FC<ClipperEngineProps> = ({
   matchLogs,
   onPublishClip,
+  onOpenClipperSettings,
   currentUser
 }) => {
   const { customColor } = useAtmosphere();
-  const { isTauriEnvironment, status: nativeStatus, startCapture, stopCapture } = useNativeClipper();
+  const {
+    settings: clipperSettings,
+    status: nativeStatus,
+    isRecordingQuickClip,
+    quickClipProgressSec,
+    lastPublishedClip,
+    startBackgroundCapture,
+    stopBackgroundCapture,
+    triggerQuickClipAndPost,
+    stopQuickRecordingAndPost,
+  } = useAutoClipper();
   const [selectedGame, setSelectedGame] = useState<GameType>('Valorant');
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string>('evt-2');
-  const [isCapturing, setIsCapturing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [clipTitle, setClipTitle] = useState('Clutch 1v2 no Round 12 com Desarme em 0.3s');
   const [clipDescription, setClipDescription] = useState('Situação pós-plant no Bomb A da Lotus. Fake defuse coordenado e mira afiada no retake.');
@@ -173,28 +184,77 @@ export const ClipperEngine: React.FC<ClipperEngineProps> = ({
             </p>
           </div>
 
-          {/* Game Integration Status Card */}
+          {/* Game Integration Status Card & 1-Click Quick Recorder */}
           <div 
-            className="flex flex-col gap-2 rounded-xl bg-zinc-950 border p-4 shrink-0 font-mono text-xs"
+            className="flex flex-col gap-2.5 rounded-xl bg-zinc-950 border p-4 shrink-0 font-mono text-xs min-w-[290px]"
             style={{ borderColor: getRgba(customColor, 0.3) }}
           >
             <div className="flex items-center justify-between text-zinc-400 gap-4">
-              <span>Status do Hook:</span>
+              <span>Status do Motor:</span>
               <span className="flex items-center gap-1.5 font-bold" style={{ color: customColor }}>
-                <span 
-                  className="h-2 w-2 rounded-full animate-ping"
-                  style={{ backgroundColor: customColor }}
-                />
-                CONECTADO & MONITORANDO
+                {nativeStatus.isCapturing && (
+                  <span 
+                    className="h-2 w-2 rounded-full animate-ping"
+                    style={{ backgroundColor: customColor }}
+                  />
+                )}
+                {nativeStatus.isCapturing ? 'GRAVANDO EM BUFFER' : 'PRONTO PARA GRAVAR'}
               </span>
             </div>
             <div className="flex items-center justify-between text-zinc-400 gap-4">
-              <span>Taxa de Polling:</span>
-              <span className="text-zinc-200">120 Hz (Event Hook API)</span>
+              <span>Encoder:</span>
+              <span className="text-zinc-200 truncate max-w-[180px]" title={nativeStatus.gpuEncoder}>
+                {nativeStatus.gpuEncoder}
+              </span>
             </div>
             <div className="flex items-center justify-between text-zinc-400 gap-4">
-              <span>Buffer de Replay:</span>
-              <span style={{ color: customColor }}>Ativo (Últimos 120s)</span>
+              <span>Buffer / Tempo:</span>
+              <span style={{ color: customColor }}>
+                {nativeStatus.bufferedSeconds}s / {clipperSettings.clipDurationSeconds}s ({nativeStatus.memoryUsageMb.toFixed(1)} MB)
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                onClick={() => {
+                  if (isRecordingQuickClip) {
+                    void stopQuickRecordingAndPost(clipTitle);
+                  } else {
+                    void triggerQuickClipAndPost(clipTitle);
+                  }
+                }}
+                className="flex-1 rounded-lg px-3 py-2 font-bold text-zinc-950 cursor-pointer transition-all active:scale-95"
+                style={{ backgroundColor: isRecordingQuickClip ? '#fb7185' : customColor }}
+              >
+                {isRecordingQuickClip
+                  ? `Parar e Postar (${quickClipProgressSec}s)`
+                  : nativeStatus.isCapturing
+                    ? `Clipar & Postar [${clipperSettings.hotkey}]`
+                    : `Gravar Rápido (${clipperSettings.clipDurationSeconds}s)`}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (nativeStatus.isCapturing) {
+                    void stopBackgroundCapture();
+                  } else {
+                    void startBackgroundCapture().catch(() => {});
+                  }
+                }}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-200 hover:bg-zinc-800 cursor-pointer"
+              >
+                {nativeStatus.isCapturing ? 'Pausar' : 'Buffer'}
+              </button>
+
+              {onOpenClipperSettings && (
+                <button
+                  onClick={onOpenClipperSettings}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 text-zinc-300 hover:text-white cursor-pointer"
+                  title="Configurar tempo e início no Perfil"
+                >
+                  <Sliders className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -358,11 +418,19 @@ export const ClipperEngine: React.FC<ClipperEngineProps> = ({
 
             {/* Video Preview Frame */}
             <div className="relative aspect-video w-full bg-zinc-950 overflow-hidden">
-              <img
-                src={selectedEvent?.videoSnippet || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80'}
-                alt="Event Preview"
-                className="h-full w-full object-cover opacity-85"
-              />
+              {lastPublishedClip?.videoType === 'video' ? (
+                <video
+                  src={lastPublishedClip.videoUrl}
+                  controls
+                  className="h-full w-full object-contain bg-black"
+                />
+              ) : (
+                <img
+                  src={selectedEvent?.videoSnippet || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80'}
+                  alt="Event Preview"
+                  className="h-full w-full object-cover opacity-85"
+                />
+              )}
 
               {/* Watermark & Telemetry Overlay Preview */}
               <div 

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { FeedView } from './components/FeedView';
 const ClipperEngine = lazy(() => import('./components/ClipperEngine').then(m => ({ default: m.ClipperEngine })));
@@ -15,8 +15,10 @@ import { INITIAL_CLIPS, PLAYERS_DIRECTORY, ONGOING_MATCH_LOGS } from './data/moc
 import { Clip, Player, PlayerReview } from './types';
 import { ThemeAtmosphereProvider, useAtmosphere, getRgba } from './context/ThemeAtmosphereContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AutoClipperProvider, useAutoClipper } from './context/AutoClipperContext';
 import { AuthModal } from './components/modals/AuthModal';
 import { soundFx } from '@wespace/ui';
+import { loadPersistedClips, savePersistedClip, deletePersistedClip } from './utils/clipStorage';
 
 function MainApp() {
   const { isPaletteModalOpen, setIsPaletteModalOpen, customColor, themeConfig } = useAtmosphere();
@@ -37,6 +39,7 @@ function MainApp() {
 
   // Selected player for profile view
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('player-1');
+  const [profileInitialTab, setProfileInitialTab] = useState<'overview' | 'radar' | 'voice' | 'reviews' | 'settings'>('overview');
 
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -55,6 +58,15 @@ function MainApp() {
   const handleSelectPlayer = (playerId: string) => {
     soundFx.playTactileClick();
     setSelectedPlayerId(playerId);
+    setProfileInitialTab('overview');
+    setActiveTab('profiles');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenClipperSettings = () => {
+    soundFx.playTactileClick();
+    setSelectedPlayerId(currentUser.id);
+    setProfileInitialTab('settings');
     setActiveTab('profiles');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -128,8 +140,36 @@ function MainApp() {
     );
   };
 
+  // Hydrate permanently stored clips (Tauri disk + IndexedDB) on app startup
+  useEffect(() => {
+    let active = true;
+    loadPersistedClips().then((savedClips) => {
+      if (!active || savedClips.length === 0) return;
+      const savedIds = new Set(savedClips.map((c) => c.id));
+      setClips((prev) => [...savedClips, ...prev.filter((c) => !savedIds.has(c.id))]);
+      setPlayers((prev) =>
+        prev.map((p) => {
+          const ownSaved = savedClips.filter((c) => c.author.id === p.id);
+          if (ownSaved.length === 0) return p;
+          const ownIds = new Set(ownSaved.map((c) => c.id));
+          return {
+            ...p,
+            clips: [...ownSaved, ...p.clips.filter((c) => !ownIds.has(c.id))],
+          };
+        })
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handlePublishClip = (newClip: Clip) => {
-    setClips((prev) => [newClip, ...prev]);
+    if (!newClip.isLocalPersisted) {
+      void savePersistedClip(newClip);
+    }
+
+    setClips((prev) => [newClip, ...prev.filter((c) => c.id !== newClip.id)]);
 
     // Also link clip to player's profile if it's the current user
     setPlayers((prev) =>
@@ -137,7 +177,7 @@ function MainApp() {
         if (p.id === currentUser.id) {
           return {
             ...p,
-            clips: [newClip, ...p.clips]
+            clips: [newClip, ...p.clips.filter((c) => c.id !== newClip.id)]
           };
         }
         return p;
@@ -145,6 +185,18 @@ function MainApp() {
     );
 
     setActiveTab('feed');
+  };
+
+  const handleDeleteClip = (clipId: string) => {
+    const target = clips.find((c) => c.id === clipId);
+    void deletePersistedClip(clipId, target?.localFilePath);
+    setClips((prev) => prev.filter((c) => c.id !== clipId));
+    setPlayers((prev) =>
+      prev.map((p) => ({
+        ...p,
+        clips: p.clips.filter((c) => c.id !== clipId),
+      }))
+    );
   };
 
   const handleUpdatePlayer = (updatedPlayer: Player) => {
@@ -156,6 +208,7 @@ function MainApp() {
   const activePlayer = players.find((p) => p.id === selectedPlayerId) || players[0];
 
   return (
+    <AutoClipperProvider currentUser={currentUser} onPublishClip={handlePublishClip}>
     <div className="min-h-screen bg-zinc-950 bg-tactical-grid text-zinc-100 flex flex-col font-sans">
       
       <a href="#main-content" className="sr-only focus:not-sr-only focus:p-3 focus:bg-zinc-800">Pular para o conteúdo</a>
@@ -191,8 +244,10 @@ function MainApp() {
             onToggleEndorse={handleToggleEndorse}
             endorsedClips={endorsedClips}
             onOpenMatchLog={handleOpenMatchLog}
+            onDeleteClip={handleDeleteClip}
             onOpenCreateModal={() => setIsCreateModalOpen(true)}
             onOpenClipper={() => setActiveTab('clipper')}
+            onOpenClipperSettings={handleOpenClipperSettings}
             onOpenDuos={() => setActiveTab('duos')}
             onOpenArenaTheater={handleOpenArenaTheater}
           />
@@ -202,6 +257,7 @@ function MainApp() {
           <ClipperEngine
             matchLogs={matchLogs}
             onPublishClip={handlePublishClip}
+            onOpenClipperSettings={handleOpenClipperSettings}
             currentUser={currentUser}
           />
         )}
@@ -221,6 +277,7 @@ function MainApp() {
             player={activePlayer}
             allPlayers={players}
             currentUserId={currentUser.id}
+            initialTab={profileInitialTab}
             onUpdatePlayer={handleUpdatePlayer}
             onOpenCreateModal={() => setIsCreateModalOpen(true)}
             onOpenClipper={() => setActiveTab('clipper')}
@@ -229,6 +286,7 @@ function MainApp() {
             onToggleEndorse={handleToggleEndorse}
             endorsedClips={endorsedClips}
             onOpenMatchLog={handleOpenMatchLog}
+            onDeleteClip={handleDeleteClip}
             onOpenReviewModal={handleOpenReviewModal}
             onOpenArenaTheater={handleOpenArenaTheater}
           />
@@ -315,7 +373,208 @@ function MainApp() {
       />
 
       <AuthModal />
+      <MonitorSelectModal />
+      <AutoClipperFloatingHud />
 
+    </div>
+    </AutoClipperProvider>
+  );
+}
+
+function MonitorSelectModal() {
+  const {
+    isMonitorPromptOpen,
+    monitors,
+    settings,
+    closeMonitorPrompt,
+    confirmMonitorSelection,
+    refreshMonitors,
+  } = useAutoClipper();
+  const [rememberChoice, setRememberChoice] = useState(true);
+
+  if (!isMonitorPromptOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-zinc-950 p-5 shadow-2xl space-y-4">
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-white font-mono">
+              Qual monitor está sendo usado?
+            </h3>
+            <p className="text-xs text-zinc-400 mt-1">
+              Detectamos {monitors.length} monitores conectados. Escolha qual tela o Auto-Clipper deve gravar.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={closeMonitorPrompt}
+            className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded bg-zinc-900 border border-zinc-800 cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {monitors.map((mon) => {
+            const isSelected =
+              settings.selectedMonitorId === mon.id ||
+              (settings.selectedMonitorId === 'primary' && mon.is_primary);
+            return (
+              <button
+                key={mon.id}
+                type="button"
+                onClick={() => void confirmMonitorSelection(mon.id, rememberChoice)}
+                className={`w-full flex items-center justify-between rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                  isSelected
+                    ? 'border-emerald-500 bg-emerald-500/15 text-white'
+                    : 'border-zinc-800 bg-zinc-900/70 text-zinc-200 hover:border-emerald-500/50'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold font-mono flex items-center gap-2">
+                    <span>{mon.name}</span>
+                    {mon.is_primary && (
+                      <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300 border border-emerald-500/30">
+                        Principal
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                    Resolução {mon.width}x{mon.height} • Posição ({mon.x}, {mon.y})
+                  </div>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-400">
+                  Gravar esta tela →
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => void confirmMonitorSelection('all', rememberChoice)}
+            className="w-full flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-left text-zinc-300 hover:border-zinc-600 cursor-pointer"
+          >
+            <div>
+              <div className="text-xs font-bold font-mono">Todas as Telas (Combinado)</div>
+              <div className="text-[11px] font-mono text-zinc-500 mt-0.5">
+                Captura toda a área estendida do desktop
+              </div>
+            </div>
+            <span className="text-xs font-mono text-zinc-400">Selecionar →</span>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
+          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberChoice}
+              onChange={(e) => setRememberChoice(e.target.checked)}
+              className="h-4 w-4 rounded accent-emerald-500"
+            />
+            <span>Lembrar este monitor nas próximas gravações</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void refreshMonitors()}
+            className="text-[11px] font-mono text-emerald-400 hover:underline cursor-pointer"
+          >
+            Atualizar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AutoClipperFloatingHud() {
+  const {
+    status,
+    isRecordingQuickClip,
+    quickClipProgressSec,
+    countdownRemaining,
+    settings,
+    toastMessage,
+    triggerQuickClipAndPost,
+    stopQuickRecordingAndPost,
+    stopBackgroundCapture,
+    cancelCountdown,
+  } = useAutoClipper();
+
+  const isBufferRecording = status.isCapturing && !isRecordingQuickClip;
+
+  if (!isRecordingQuickClip && !isBufferRecording && countdownRemaining === null && !toastMessage) {
+    return null;
+  }
+
+  return (
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+      {countdownRemaining !== null && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-500/50 bg-zinc-950/95 px-4 py-3 text-xs font-mono text-amber-300 shadow-2xl backdrop-blur-md">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping" />
+          <span>Iniciando gravação em {countdownRemaining}s...</span>
+          <button
+            onClick={cancelCountdown}
+            className="rounded-lg bg-zinc-800 px-2.5 py-1 text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {isRecordingQuickClip && (
+        <div className="flex items-center gap-3 rounded-2xl border border-rose-500/70 bg-zinc-950/95 px-4 py-3 text-xs font-mono text-white shadow-[0_0_24px_rgba(244,63,94,0.35)] backdrop-blur-md">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75 animate-ping" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+          </span>
+          <span className="font-bold text-rose-400">REC</span>
+          <span>
+            {status.activeMonitor ? `${status.activeMonitor} • ` : ''}
+            Gravando ({quickClipProgressSec}s / {settings.clipDurationSeconds}s)
+          </span>
+          <button
+            onClick={() => void stopQuickRecordingAndPost()}
+            className="rounded-lg bg-emerald-500 px-3 py-1.5 font-bold text-zinc-950 hover:bg-emerald-400 cursor-pointer"
+          >
+            Parar e Postar no Feed
+          </button>
+        </div>
+      )}
+
+      {isBufferRecording && (
+        <div className="flex items-center gap-3 rounded-2xl border border-rose-500/50 bg-zinc-950/95 px-4 py-2.5 text-xs font-mono text-white shadow-2xl backdrop-blur-md">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75 animate-ping" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+          </span>
+          <span className="font-bold text-rose-400">REC</span>
+          <span className="text-zinc-200">
+            {status.activeMonitor ? `${status.activeMonitor} • ` : ''}
+            Buffer ({status.bufferedSeconds}s / {settings.clipDurationSeconds}s • {status.memoryUsageMb.toFixed(1)} MB)
+          </span>
+          <button
+            onClick={() => void triggerQuickClipAndPost()}
+            className="rounded-lg bg-emerald-500 px-2.5 py-1 font-bold text-zinc-950 hover:bg-emerald-400 cursor-pointer"
+          >
+            Clipar [{settings.hotkey}]
+          </button>
+          <button
+            onClick={() => void stopBackgroundCapture()}
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-zinc-300 hover:text-white cursor-pointer"
+          >
+            Parar
+          </button>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="rounded-xl border border-emerald-500/40 bg-zinc-950/95 px-4 py-2.5 text-xs font-mono text-emerald-300 shadow-xl backdrop-blur-md">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

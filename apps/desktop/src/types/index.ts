@@ -38,6 +38,9 @@ export interface Clip {
   agentOrHero: string;
   videoType: 'simulated' | 'video';
   videoUrl: string;
+  localFilePath?: string;
+  videoMimeType?: string;
+  isLocalPersisted?: boolean;
   previewColor: string;
   durationSeconds: number;
   author: {

@@ -20,7 +20,8 @@ import {
   Zap,
   Tag,
   Eye,
-  ThumbsDown
+  ThumbsDown,
+  Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Clip } from '../types';
@@ -37,6 +38,7 @@ interface ClipCardProps {
   hasDisliked: boolean;
   onOpenMatchLog: (clip: Clip) => void;
   onOpenArenaTheater: (clip: Clip) => void;
+  onDeleteClip?: (clipId: string) => void;
 }
 
 export const ClipCard: React.FC<ClipCardProps> = ({
@@ -48,7 +50,8 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   onToggleDislike,
   hasDisliked,
   onOpenMatchLog,
-  onOpenArenaTheater
+  onOpenArenaTheater,
+  onDeleteClip
 }) => {
   const { themeConfig, customColor, isScanlinesActive } = useAtmosphere();
   const [isPlaying, setIsPlaying] = useState(false);
@@ -57,9 +60,12 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [voiceActive, setVoiceActive] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const isRealVideo = clip.videoType === 'video';
 
   // Playback timer & simulated gameplay rendering
   useEffect(() => {
+    if (isRealVideo) return;
     let interval: any;
     if (isPlaying) {
       interval = setInterval(() => {
@@ -72,7 +78,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, clip.durationSeconds]);
+  }, [isPlaying, clip.durationSeconds, isRealVideo]);
 
   // Voice communication activation cycle
   useEffect(() => {
@@ -250,23 +256,38 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
       {/* Video / Visualizer Frame with Telemetry HUD Overlay */}
       <div className="relative aspect-video w-full bg-black overflow-hidden select-none">
-        
-        {/* Background Image / Gameplay preview */}
-        <img
-          src={clip.videoUrl}
-          alt={clip.title}
-          className={`h-full w-full object-cover transition-transform duration-700 ${
-            isPlaying ? 'scale-105 opacity-90' : 'opacity-70 group-hover:opacity-85'
-          }`}
-        />
+        {isRealVideo ? (
+          <video
+            ref={videoRef}
+            src={clip.videoUrl}
+            controls
+            playsInline
+            muted={isMuted}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onTimeUpdate={(e) => setCurrentTime(Math.floor(e.currentTarget.currentTime))}
+            className="h-full w-full object-contain bg-black"
+          />
+        ) : (
+          <>
+            {/* Background Image / Gameplay preview */}
+            <img
+              src={clip.videoUrl}
+              alt={clip.title}
+              className={`h-full w-full object-cover transition-transform duration-700 ${
+                isPlaying ? 'scale-105 opacity-90' : 'opacity-70 group-hover:opacity-85'
+              }`}
+            />
 
-        {/* Canvas HUD simulation overlay */}
-        <canvas
-          ref={canvasRef}
-          width={640}
-          height={360}
-          className="absolute inset-0 h-full w-full pointer-events-none"
-        />
+            {/* Canvas HUD simulation overlay */}
+            <canvas
+              ref={canvasRef}
+              width={640}
+              height={360}
+              className="absolute inset-0 h-full w-full pointer-events-none"
+            />
+          </>
+        )}
 
         {/* Optional Scanlines Shader */}
         {isScanlinesActive && (
@@ -384,27 +405,29 @@ export const ClipCard: React.FC<ClipCardProps> = ({
           </div>
         </div>
 
-        {/* Play/Pause Overlay Click Target */}
-        <div 
-          onClick={() => {
-            soundFx.playTactileClick();
-            setIsPlaying(!isPlaying);
-          }}
-          className={`absolute inset-0 flex items-center justify-center cursor-pointer transition-opacity ${
-            isPlaying ? 'opacity-0 hover:opacity-100 bg-black/30' : 'opacity-100 bg-black/40'
-          }`}
-        >
+        {/* Play/Pause Overlay Click Target (only for simulated clips; real video uses native controls) */}
+        {!isRealVideo && (
           <div 
-            className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
-            style={{
-              backgroundColor: customColor,
-              color: isLight ? '#09090b' : '#09090b',
-              boxShadow: `0 0 20px ${getRgba(customColor, 0.4)}`
+            onClick={() => {
+              soundFx.playTactileClick();
+              setIsPlaying(!isPlaying);
             }}
+            className={`absolute inset-0 flex items-center justify-center cursor-pointer transition-opacity ${
+              isPlaying ? 'opacity-0 hover:opacity-100 bg-black/30' : 'opacity-100 bg-black/40'
+            }`}
           >
-            {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 translate-x-0.5 fill-current" />}
+            <div 
+              className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all"
+              style={{
+                backgroundColor: customColor,
+                color: isLight ? '#09090b' : '#09090b',
+                boxShadow: `0 0 20px ${getRgba(customColor, 0.4)}`
+              }}
+            >
+              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 translate-x-0.5 fill-current" />}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Video Controls Bar */}
         <div className="absolute bottom-0 inset-x-0 h-1 bg-zinc-800/80">
@@ -557,6 +580,19 @@ export const ClipCard: React.FC<ClipCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {clip.isLocalPersisted && onDeleteClip && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  soundFx.playTactileClick();
+                  onDeleteClip(clip.id);
+                }}
+                className="flex items-center justify-center p-1.5 rounded-lg bg-zinc-800/60 text-zinc-400 hover:bg-rose-500/15 hover:text-rose-400 border border-zinc-700/50 hover:border-rose-500/40 transition-colors cursor-pointer"
+                title="Excluir clipe salvo localmente"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
               onClick={() => {
                 soundFx.playTactileClick();

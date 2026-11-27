@@ -481,19 +481,31 @@ export const ArenaTheaterModal: React.FC<ArenaTheaterModalProps> = ({
             
             {/* Cinematic Player Window */}
             <div className="relative aspect-video w-full bg-zinc-950 overflow-hidden flex items-center justify-center select-none">
-              <img
-                src={clip.videoUrl}
-                alt={clip.title}
-                className="h-full w-full object-cover opacity-85"
-              />
+              {clip.videoType === 'video' ? (
+                <video
+                  src={clip.videoUrl}
+                  controls
+                  autoPlay={isPlaying}
+                  muted={isMuted}
+                  className="h-full w-full object-contain bg-black"
+                />
+              ) : (
+                <>
+                  <img
+                    src={clip.videoUrl}
+                    alt={clip.title}
+                    className="h-full w-full object-cover opacity-85"
+                  />
 
-              {/* Dynamic HUD Reticle Canvas */}
-              <canvas
-                ref={mainCanvasRef}
-                width={800}
-                height={450}
-                className="absolute inset-0 h-full w-full pointer-events-none"
-              />
+                  {/* Dynamic HUD Reticle Canvas */}
+                  <canvas
+                    ref={mainCanvasRef}
+                    width={800}
+                    height={450}
+                    className="absolute inset-0 h-full w-full pointer-events-none"
+                  />
+                </>
+              )}
 
               {/* Optional CRT Scanlines Shader */}
               {isScanlinesActive && (

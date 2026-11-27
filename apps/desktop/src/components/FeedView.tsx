@@ -24,6 +24,7 @@ import {
 import { Clip, Player, OngoingMatchLog } from '../types';
 import { ClipCard } from './ClipCard';
 import { useAtmosphere, getRgba, isLightColor } from '../context/ThemeAtmosphereContext';
+import { useAutoClipper } from '../context/AutoClipperContext';
 import { soundFx } from '../utils/soundEngine';
 
 interface FeedViewProps {
@@ -43,8 +44,10 @@ interface FeedViewProps {
   onToggleEndorse: (clipId: string) => void;
   endorsedClips: Set<string>;
   onOpenMatchLog: (clip: Clip) => void;
+  onDeleteClip?: (clipId: string) => void;
   onOpenCreateModal: () => void;
   onOpenClipper: () => void;
+  onOpenClipperSettings: () => void;
   onOpenDuos: () => void;
   onOpenArenaTheater: (clip: Clip) => void;
 }
@@ -59,33 +62,47 @@ export const FeedView: React.FC<FeedViewProps> = ({
   onToggleEndorse,
   endorsedClips,
   onOpenMatchLog,
+  onDeleteClip,
   onOpenCreateModal,
   onOpenClipper,
+  onOpenClipperSettings,
   onOpenDuos,
   onOpenArenaTheater
 }) => {
   const { customColor } = useAtmosphere();
+  const {
+    settings: clipperSettings,
+    updateSettings: updateClipperSettings,
+    status: clipperStatus,
+    monitors,
+    openMonitorPrompt,
+    isRecordingQuickClip,
+    quickClipProgressSec,
+    triggerQuickClipAndPost,
+    stopQuickRecordingAndPost,
+    startBackgroundCapture,
+    stopBackgroundCapture,
+  } = useAutoClipper();
   const [selectedGameFilter, setSelectedGameFilter] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'clutches' | 'igl_calls' | 'high_rep'>('all');
   const [dislikedClips, setDislikedClips] = useState<Set<string>>(new Set());
   const [lobbyGameFilter, setLobbyGameFilter] = useState<string>('all');
-  
-  // Simulated live telemetry metrics for the Auto-Clipper sidebar
-  const [ramUsage, setRamUsage] = useState(142);
-  const [bufferSeconds, setBufferSeconds] = useState(60);
   const [hotkeySavedToast, setHotkeySavedToast] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRamUsage(138 + Math.floor(Math.random() * 11));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleTriggerHotkeyClip = () => {
-    soundFx.playClutchFanfare();
-    setHotkeySavedToast(true);
-    setTimeout(() => setHotkeySavedToast(false), 3500);
+  const handleTriggerHotkeyClip = async () => {
+    if (isRecordingQuickClip) {
+      const created = await stopQuickRecordingAndPost();
+      if (created) {
+        setHotkeySavedToast(true);
+        setTimeout(() => setHotkeySavedToast(false), 3500);
+      }
+      return;
+    }
+    const created = await triggerQuickClipAndPost();
+    if (created) {
+      setHotkeySavedToast(true);
+      setTimeout(() => setHotkeySavedToast(false), 3500);
+    }
   };
 
   const handleToggleDislike = (clipId: string) => {
@@ -338,9 +355,13 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   <p className="text-[10px] text-zinc-400 font-mono">Buffer Circular Local</p>
                 </div>
               </div>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                ATIVO
+              <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                clipperStatus.isCapturing
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+              }`}>
+                {clipperStatus.isCapturing && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />}
+                {clipperStatus.isCapturing ? 'GRAVANDO' : 'PRONTO'}
               </span>
             </div>
 
@@ -349,9 +370,11 @@ export const FeedView: React.FC<FeedViewProps> = ({
               <div className="flex items-center justify-between text-zinc-300">
                 <span className="text-zinc-500 flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-zinc-400" />
-                  Buffer em Memória:
+                  Tempo / Buffer:
                 </span>
-                <span className="font-bold text-white">{bufferSeconds}s (1080p 60fps)</span>
+                <span className="font-bold text-white">
+                  {clipperStatus.bufferedSeconds}s / {clipperSettings.clipDurationSeconds}s ({clipperSettings.fps}fps)
+                </span>
               </div>
 
               <div className="space-y-1">
@@ -361,14 +384,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     Consumo de RAM:
                   </span>
                   <span style={{ color: customColor }} className="font-bold">
-                    {ramUsage} MB <span className="text-zinc-500 font-normal">/ 200 MB máx</span>
+                    {clipperStatus.memoryUsageMb.toFixed(1)} MB <span className="text-zinc-500 font-normal">/ 200 MB máx</span>
                   </span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
                   <div 
                     className="h-full rounded-full transition-all duration-500"
                     style={{ 
-                      width: `${(ramUsage / 200) * 100}%`,
+                      width: `${Math.min(100, Math.max(4, (clipperStatus.memoryUsageMb / 200) * 100))}%`,
                       backgroundColor: customColor 
                     }}
                   />
@@ -376,46 +399,118 @@ export const FeedView: React.FC<FeedViewProps> = ({
               </div>
 
               <div className="flex items-center justify-between text-[11px] pt-1">
-                <span className="text-zinc-500">Aceleração GPU:</span>
-                <span className="text-zinc-300 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                  NVENC / FFmpeg
+                <span className="text-zinc-500">Motor:</span>
+                <span className="text-zinc-300 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 truncate max-w-[160px]" title={clipperStatus.gpuEncoder}>
+                  {clipperStatus.gpuEncoder}
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-500">Monitor:</span>
+                <button
+                  type="button"
+                  onClick={() => void openMonitorPrompt()}
+                  className="text-zinc-200 hover:text-white bg-zinc-900 hover:bg-zinc-800 px-2 py-0.5 rounded border border-zinc-800 truncate max-w-[175px] cursor-pointer"
+                  title="Selecionar monitor de captura"
+                >
+                  {clipperStatus.isCapturing
+                    ? clipperStatus.activeMonitor
+                    : clipperSettings.selectedMonitorId === 'all'
+                      ? 'Todas as Telas'
+                      : monitors.find(
+                          (m) =>
+                            m.id === clipperSettings.selectedMonitorId ||
+                            (clipperSettings.selectedMonitorId === 'primary' && m.is_primary)
+                        )?.name || 'Monitor Principal'}
+                  {monitors.length > 1 ? ' • Trocar' : ''}
+                </button>
               </div>
             </div>
 
-            {/* Hotkey F9 Quick Trigger Simulation */}
+            {/* Fast 1-Click Capture & Duration Selector */}
             <div className="rounded-xl bg-zinc-900/80 border border-zinc-800/90 p-3 space-y-2.5">
               <div className="flex items-center justify-between text-[11px] font-mono">
-                <span className="text-zinc-400">Atalho de Captura:</span>
-                <kbd 
-                  className="px-2 py-0.5 rounded text-[11px] font-bold border shadow-sm"
-                  style={{
-                    backgroundColor: getRgba(customColor, 0.15),
-                    borderColor: getRgba(customColor, 0.4),
-                    color: customColor
-                  }}
-                >
-                  Hotkey [F9]
-                </kbd>
+                <span className="text-zinc-400">Tempo rápido:</span>
+                <div className="flex items-center gap-1">
+                  {[15, 30, 45].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => updateClipperSettings({ clipDurationSeconds: sec })}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${
+                        clipperSettings.clipDurationSeconds === sec
+                          ? 'text-zinc-950'
+                          : 'bg-zinc-950 text-zinc-400 border-zinc-800'
+                      }`}
+                      style={
+                        clipperSettings.clipDurationSeconds === sec
+                          ? { backgroundColor: customColor, borderColor: customColor }
+                          : undefined
+                      }
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                  <kbd 
+                    className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                    style={{
+                      backgroundColor: getRgba(customColor, 0.15),
+                      borderColor: getRgba(customColor, 0.4),
+                      color: customColor
+                    }}
+                  >
+                    {clipperSettings.hotkey}
+                  </kbd>
+                </div>
               </div>
 
               <button
-                onClick={handleTriggerHotkeyClip}
-                className="w-full py-2 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 border transition-all active:scale-95 cursor-pointer"
+                onClick={() => void handleTriggerHotkeyClip()}
+                className="w-full py-2.5 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 border transition-all active:scale-95 cursor-pointer"
                 style={{
-                  backgroundColor: getRgba(customColor, 0.12),
-                  borderColor: getRgba(customColor, 0.35),
-                  color: customColor
+                  backgroundColor: isRecordingQuickClip ? '#e11d48' : customColor,
+                  borderColor: isRecordingQuickClip ? '#f43f5e' : customColor,
+                  color: isRecordingQuickClip ? '#ffffff' : '#09090b'
                 }}
               >
-                <Terminal className="h-3.5 w-3.5" />
-                <span>Simular Disparo [F9] (60s)</span>
+                <Video className="h-3.5 w-3.5" />
+                <span>
+                  {isRecordingQuickClip
+                    ? `Parar & Postar (${quickClipProgressSec}s / ${clipperSettings.clipDurationSeconds}s)`
+                    : clipperStatus.isCapturing
+                      ? `Clipar & Postar Agora [${clipperSettings.hotkey}]`
+                      : `Gravar Rápido (${clipperSettings.clipDurationSeconds}s) & Postar`}
+                </span>
               </button>
+
+              <div className="flex items-center justify-between text-[11px] font-mono pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (clipperStatus.isCapturing) {
+                      void stopBackgroundCapture();
+                    } else {
+                      void startBackgroundCapture().catch(() => {});
+                    }
+                  }}
+                  className="text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  {clipperStatus.isCapturing ? 'Pausar buffer' : 'Ativar buffer 24/7'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenClipperSettings}
+                  className="hover:underline cursor-pointer"
+                  style={{ color: customColor }}
+                >
+                  Configurar tempo/início
+                </button>
+              </div>
 
               {hotkeySavedToast && (
                 <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/50 border border-emerald-500/30 rounded-lg p-2 flex items-center gap-1.5 animate-fadeIn">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>Clipe MP4 salvo localmente sem queda de FPS!</span>
+                  <span>Vídeo gravado e postado no seu Feed!</span>
                 </div>
               )}
             </div>
@@ -568,6 +663,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   hasDisliked={dislikedClips.has(clip.id)}
                   onOpenMatchLog={onOpenMatchLog}
                   onOpenArenaTheater={onOpenArenaTheater}
+                  onDeleteClip={onDeleteClip}
                 />
               ))}
             </div>

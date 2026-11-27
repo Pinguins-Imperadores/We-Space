@@ -11,34 +11,34 @@ import {
   Play, 
   Pause, 
   Star, 
-  Zap, 
-  Award,
   Activity,
   MapPin,
   Globe,
-  Eye,
   Edit3,
   Plus,
   Layers,
   Clock,
-  Crosshair,
   Users,
   X,
   Save,
   Sparkles,
   Video,
-  ChevronRight
+  Settings,
+  Cpu,
+  Timer
 } from 'lucide-react';
-import { Player, Clip } from '../types';
+import { Player, Clip, GameType } from '../types';
 import { ClipCard } from './ClipCard';
 import { RadarChart } from './RadarChart';
 import { useAtmosphere, getRgba, isLightColor } from '../context/ThemeAtmosphereContext';
+import { useAutoClipper, StartTriggerMode } from '../context/AutoClipperContext';
 import { soundFx } from '../utils/soundEngine';
 
 interface PlayerProfileViewProps {
   player: Player;
   allPlayers: Player[];
   currentUserId: string;
+  initialTab?: 'overview' | 'radar' | 'voice' | 'reviews' | 'settings';
   onUpdatePlayer: (updatedPlayer: Player) => void;
   onOpenCreateModal: () => void;
   onOpenClipper: () => void;
@@ -47,6 +47,7 @@ interface PlayerProfileViewProps {
   onToggleEndorse: (clipId: string) => void;
   endorsedClips: Set<string>;
   onOpenMatchLog: (clip: Clip) => void;
+  onDeleteClip?: (clipId: string) => void;
   onOpenReviewModal: (player: Player) => void;
   onOpenArenaTheater: (clip: Clip) => void;
 }
@@ -55,6 +56,7 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
   player,
   allPlayers,
   currentUserId,
+  initialTab = 'overview',
   onUpdatePlayer,
   onOpenCreateModal,
   onOpenClipper,
@@ -63,11 +65,31 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
   onToggleEndorse,
   endorsedClips,
   onOpenMatchLog,
+  onDeleteClip,
   onOpenReviewModal,
   onOpenArenaTheater
 }) => {
   const { customColor } = useAtmosphere();
-  const [activeTab, setActiveTab] = useState<'overview' | 'radar' | 'voice' | 'reviews'>('overview');
+  const {
+    settings: clipperSettings,
+    updateSettings: updateClipperSettings,
+    resetSettings: resetClipperSettings,
+    status: clipperStatus,
+    monitors,
+    refreshMonitors,
+    isRecordingQuickClip,
+    quickClipProgressSec,
+    triggerQuickClipAndPost,
+    stopQuickRecordingAndPost,
+    startBackgroundCapture,
+    stopBackgroundCapture,
+  } = useAutoClipper();
+  const [activeTab, setActiveTab] = useState<'overview' | 'radar' | 'voice' | 'reviews' | 'settings'>(initialTab);
+  const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [isPlayingVoiceSample, setIsPlayingVoiceSample] = useState(false);
   const [dislikedClips, setDislikedClips] = useState<Set<string>>(new Set());
@@ -593,6 +615,26 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
             <Star className="h-4 w-4" />
             <span>Avaliações Pós-Jogo ({player.reviews.length})</span>
           </button>
+
+          <button
+            onClick={() => {
+              soundFx.playTactileClick();
+              setActiveTab('settings');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors whitespace-nowrap border cursor-pointer ${
+              activeTab === 'settings'
+                ? 'shadow-md'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border-transparent'
+            }`}
+            style={{
+              backgroundColor: activeTab === 'settings' ? customColor : undefined,
+              color: activeTab === 'settings' ? '#09090b' : undefined,
+              borderColor: activeTab === 'settings' ? customColor : 'transparent'
+            }}
+          >
+            <Settings className="h-4 w-4" />
+            <span>Configurações do Auto-Clipper</span>
+          </button>
         </div>
 
         <div className="hidden md:flex items-center gap-2 text-xs font-mono text-zinc-400">
@@ -654,6 +696,7 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
                     hasDisliked={dislikedClips.has(clip.id)}
                     onOpenMatchLog={onOpenMatchLog}
                     onOpenArenaTheater={onOpenArenaTheater}
+                    onDeleteClip={onDeleteClip}
                   />
                 </div>
               ))}
@@ -1031,6 +1074,575 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT 5: Configurações do Auto-Clipper (Tempo, Início de Gravação e Publicação) */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-2xl border border-zinc-800/90 bg-zinc-950/90 p-5 shadow-xl">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono font-bold uppercase tracking-wider" style={{ color: customColor }}>
+                <Cpu className="h-4 w-4" />
+                <span>Configurações do Auto-Clipper Nativo</span>
+                {(clipperStatus.isCapturing || isRecordingQuickClip) && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 border border-rose-500/50 px-2.5 py-0.5 text-[10px] text-rose-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                    REC • GRAVANDO ({isRecordingQuickClip ? `${quickClipProgressSec}s` : `${clipperStatus.bufferedSeconds}s`})
+                  </span>
+                )}
+              </div>
+              <h3 className="text-lg font-bold text-white font-display">
+                Defina o tempo do clipe, quando começar a gravar e a postagem automática
+              </h3>
+              <p className="text-xs text-zinc-400 font-mono">
+                Motor atual: <strong className="text-zinc-200">{clipperStatus.captureSource}</strong> • Encoder: <strong className="text-zinc-200">{clipperStatus.gpuEncoder}</strong>
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              {clipperStatus.isCapturing ? (
+                <button
+                  onClick={() => void stopBackgroundCapture()}
+                  className="px-4 py-2 rounded-xl border border-rose-500/40 bg-rose-500/15 text-rose-300 text-xs font-mono font-bold cursor-pointer hover:bg-rose-500/25"
+                >
+                  Pausar Captura ({clipperStatus.bufferedSeconds}s no buffer)
+                </button>
+              ) : (
+                <button
+                  onClick={() => void startBackgroundCapture().catch(() => {})}
+                  className="px-4 py-2 rounded-xl border border-zinc-800 bg-zinc-900/90 text-zinc-200 text-xs font-mono font-bold cursor-pointer hover:bg-zinc-800"
+                >
+                  Iniciar Buffer Contínuo
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  if (isRecordingQuickClip) {
+                    void stopQuickRecordingAndPost();
+                  } else {
+                    void triggerQuickClipAndPost();
+                  }
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-mono font-bold cursor-pointer shadow-md transition-all active:scale-95"
+                style={{
+                  backgroundColor: isRecordingQuickClip ? '#e11d48' : customColor,
+                  color: isRecordingQuickClip ? '#ffffff' : '#09090b'
+                }}
+              >
+                {isRecordingQuickClip
+                  ? `Parar e Postar Agora (${quickClipProgressSec}s)`
+                  : `Gravar & Postar (${clipperSettings.clipDurationSeconds}s)`}
+              </button>
+            </div>
+          </div>
+
+          {settingsSavedToast && (
+            <div
+              className="rounded-xl border p-3 px-4 flex items-center gap-2 bg-zinc-950 font-mono text-xs"
+              style={{ borderColor: customColor, color: customColor }}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Configurações salvas! O Auto-Clipper já está usando seu novo tempo e gatilho.</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card 1: Tempo de Gravação (Time & Buffer) */}
+            <div className="rounded-2xl border border-zinc-800/90 bg-zinc-950/90 p-5 space-y-5 shadow-xl">
+              <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
+                <Clock className="h-4 w-4" style={{ color: customColor }} />
+                <h4 className="text-sm font-bold text-white font-mono">
+                  1. Tempo de Gravação & Buffer (Time)
+                </h4>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-300">Duração do Clipe / Janela do Buffer:</span>
+                  <span className="font-bold" style={{ color: customColor }}>
+                    {clipperSettings.clipDurationSeconds} segundos
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[15, 30, 45, 60].map((sec) => {
+                    const active = clipperSettings.clipDurationSeconds === sec;
+                    return (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => {
+                          soundFx.playTactileClick();
+                          updateClipperSettings({
+                            clipDurationSeconds: sec,
+                            preEventSeconds: Math.round(sec * 0.75),
+                            postEventSeconds: sec - Math.round(sec * 0.75),
+                          });
+                        }}
+                        className={`py-2 rounded-xl text-xs font-mono font-bold border transition-all cursor-pointer ${
+                          active
+                            ? 'text-zinc-950'
+                            : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                        style={
+                          active
+                            ? { backgroundColor: customColor, borderColor: customColor }
+                            : undefined
+                        }
+                      >
+                        {sec}s
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="range"
+                  min={5}
+                  max={90}
+                  step={5}
+                  value={clipperSettings.clipDurationSeconds}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    updateClipperSettings({
+                      clipDurationSeconds: val,
+                      preEventSeconds: Math.round(val * 0.75),
+                      postEventSeconds: Math.max(1, val - Math.round(val * 0.75)),
+                    });
+                  }}
+                  className="w-full"
+                  style={{ accentColor: customColor }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div className="rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-3 space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-mono text-zinc-400">
+                    <span>Pré-Jogada:</span>
+                    <span className="font-bold text-white">-{clipperSettings.preEventSeconds}s</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={3}
+                    max={60}
+                    value={clipperSettings.preEventSeconds}
+                    onChange={(e) =>
+                      updateClipperSettings({ preEventSeconds: Number(e.target.value) })
+                    }
+                    className="w-full"
+                    style={{ accentColor: customColor }}
+                  />
+                </div>
+
+                <div className="rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-3 space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-mono text-zinc-400">
+                    <span>Pós-Jogada:</span>
+                    <span className="font-bold text-white">+{clipperSettings.postEventSeconds}s</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={2}
+                    max={30}
+                    value={clipperSettings.postEventSeconds}
+                    onChange={(e) =>
+                      updateClipperSettings({ postEventSeconds: Number(e.target.value) })
+                    }
+                    className="w-full"
+                    style={{ accentColor: customColor }}
+                  />
+                </div>
+              </div>
+
+              {/* Jogo Padrão (Pills) */}
+              <div className="space-y-1.5 text-xs font-mono">
+                <label className="text-[11px] text-zinc-400 block">Jogo Padrão</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Valorant', 'CS2', 'League of Legends'] as GameType[]).map((g) => {
+                    const active = clipperSettings.defaultGame === g;
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => {
+                          soundFx.playTactileClick();
+                          updateClipperSettings({ defaultGame: g });
+                        }}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          active
+                            ? 'text-zinc-950'
+                            : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                        style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                      >
+                        {g === 'League of Legends' ? 'LoL' : g}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Resolução & Taxa de Quadros (Pills) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-zinc-400 block">Resolução</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['1080p', '720p'] as const).map((q) => {
+                      const active = clipperSettings.quality === q;
+                      return (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => {
+                            soundFx.playTactileClick();
+                            updateClipperSettings({ quality: q });
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            active
+                              ? 'text-zinc-950'
+                              : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                          style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                        >
+                          {q === '1080p' ? '1080p HD' : '720p Leve'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-zinc-400 block">Taxa de Quadros</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([60, 30] as const).map((fpsOpt) => {
+                      const active = clipperSettings.fps === fpsOpt;
+                      return (
+                        <button
+                          key={fpsOpt}
+                          type="button"
+                          onClick={() => {
+                            soundFx.playTactileClick();
+                            updateClipperSettings({ fps: fpsOpt });
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            active
+                              ? 'text-zinc-950'
+                              : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                          style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                        >
+                          {fpsOpt} FPS
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Monitor de Captura */}
+              <div className="space-y-2 pt-2 border-t border-zinc-800/80 text-xs font-mono">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-zinc-400">
+                    Monitor de Captura ({monitors.length || 1} detectado{monitors.length > 1 ? 's' : ''})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundFx.playTactileClick();
+                      void refreshMonitors();
+                    }}
+                    className="text-[11px] hover:underline cursor-pointer"
+                    style={{ color: customColor }}
+                  >
+                    Detectar Monitores
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {monitors.map((mon) => {
+                    const active =
+                      clipperSettings.selectedMonitorId === mon.id ||
+                      (clipperSettings.selectedMonitorId === 'primary' && mon.is_primary);
+                    return (
+                      <button
+                        key={mon.id}
+                        type="button"
+                        onClick={() => {
+                          soundFx.playTactileClick();
+                          updateClipperSettings({
+                            selectedMonitorId: mon.id,
+                            monitorPromptConfirmed: true,
+                          });
+                        }}
+                        className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                          active
+                            ? 'text-zinc-950 font-bold'
+                            : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                        style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span>{mon.name}</span>
+                          {mon.is_primary && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                active ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-300'
+                              }`}
+                            >
+                              Principal
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-[10px] mt-0.5 ${active ? 'text-zinc-900' : 'text-zinc-500'}`}>
+                          {mon.width}x{mon.height} ({mon.x >= 0 ? `+${mon.x}` : mon.x},{mon.y >= 0 ? `+${mon.y}` : mon.y})
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundFx.playTactileClick();
+                      updateClipperSettings({
+                        selectedMonitorId: 'all',
+                        monitorPromptConfirmed: true,
+                      });
+                    }}
+                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                      clipperSettings.selectedMonitorId === 'all'
+                        ? 'text-zinc-950 font-bold'
+                        : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                    style={
+                      clipperSettings.selectedMonitorId === 'all'
+                        ? { backgroundColor: customColor, borderColor: customColor }
+                        : undefined
+                    }
+                  >
+                    <div className="text-xs">Todas as Telas</div>
+                    <div
+                      className={`text-[10px] mt-0.5 ${
+                        clipperSettings.selectedMonitorId === 'all' ? 'text-zinc-900' : 'text-zinc-500'
+                      }`}
+                    >
+                      Captura a área combinada de todos os monitores
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Quando Começar a Gravar + Auto-Post */}
+            <div className="rounded-2xl border border-zinc-800/90 bg-zinc-950/90 p-5 space-y-5 shadow-xl">
+              <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
+                <Timer className="h-4 w-4" style={{ color: customColor }} />
+                <h4 className="text-sm font-bold text-white font-mono">
+                  2. Quando Começar a Gravar & Auto-Post
+                </h4>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-mono text-zinc-300 block">
+                  Gatilho de Início da Gravação
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    {
+                      id: 'manual_hotkey' as StartTriggerMode,
+                      label: 'Manual / Atalho Rápido',
+                      desc: `Disparo em 1 clique ou tecla [${clipperSettings.hotkey}]`,
+                    },
+                    {
+                      id: 'on_app_start' as StartTriggerMode,
+                      label: 'Ao Abrir o We Space',
+                      desc: 'Inicia o buffer contínuo automaticamente no app',
+                    },
+                    {
+                      id: 'on_game_detected' as StartTriggerMode,
+                      label: 'Ao Detectar Partida',
+                      desc: 'Ativa quando jogo/GSI estiver rodando',
+                    },
+                    {
+                      id: 'scheduled_timer' as StartTriggerMode,
+                      label: 'Timer / Horário Agendado',
+                      desc: 'Contagem regressiva ou hora marcada (HH:MM)',
+                    },
+                  ].map((mode) => {
+                    const active = clipperSettings.startTriggerMode === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => {
+                          soundFx.playTactileClick();
+                          updateClipperSettings({ startTriggerMode: mode.id });
+                        }}
+                        className={`text-left rounded-xl border p-3 transition-all cursor-pointer ${
+                          active
+                            ? 'bg-zinc-900 text-white'
+                            : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                        }`}
+                        style={
+                          active
+                            ? {
+                                borderColor: customColor,
+                                backgroundColor: getRgba(customColor, 0.1),
+                              }
+                            : undefined
+                        }
+                      >
+                        <div className="text-xs font-bold font-mono" style={active ? { color: customColor } : undefined}>
+                          {mode.label}
+                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">{mode.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Atalho, Contagem & Horário Programado */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-zinc-400 block">Atalho Global</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['F9', 'F10', 'F8'] as const).map((keyOpt) => {
+                      const active = clipperSettings.hotkey === keyOpt;
+                      return (
+                        <button
+                          key={keyOpt}
+                          type="button"
+                          onClick={() => {
+                            soundFx.playTactileClick();
+                            updateClipperSettings({ hotkey: keyOpt });
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            active
+                              ? 'text-zinc-950'
+                              : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                          style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                        >
+                          {keyOpt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-zinc-400 block">Contagem p/ Iniciar</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[0, 3, 5, 10].map((sec) => {
+                      const active = clipperSettings.countdownSeconds === sec;
+                      return (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => {
+                            soundFx.playTactileClick();
+                            updateClipperSettings({ countdownSeconds: sec });
+                          }}
+                          className={`py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                            active
+                              ? 'text-zinc-950'
+                              : 'bg-zinc-900/70 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                          style={active ? { backgroundColor: customColor, borderColor: customColor } : undefined}
+                        >
+                          {sec}s
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-zinc-400 block">Horário Programado</label>
+                  <input
+                    type="time"
+                    value={clipperSettings.scheduledStartTime}
+                    onChange={(e) =>
+                      updateClipperSettings({ scheduledStartTime: e.target.value })
+                    }
+                    className="w-full rounded-xl bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 text-white font-mono"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+              </div>
+
+              {/* Toggles */}
+              <div className="space-y-2.5">
+                <label className="flex items-center justify-between rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-3 cursor-pointer">
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      Postar vídeo automaticamente no Feed após gravar
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Assim que a gravação terminar, o clipe aparece no Feed e na sua Vitrine
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={clipperSettings.autoPostToFeed}
+                    onChange={(e) =>
+                      updateClipperSettings({ autoPostToFeed: e.target.checked })
+                    }
+                    className="h-4 w-4"
+                    style={{ accentColor: customColor }}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-3 cursor-pointer">
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      Capturar áudio do microfone e da partida
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Sincroniza sua Call Limpa junto ao vídeo gravado
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={clipperSettings.includeMicAudio}
+                    onChange={(e) =>
+                      updateClipperSettings({ includeMicAudio: e.target.checked })
+                    }
+                    className="h-4 w-4"
+                    style={{ accentColor: customColor }}
+                  />
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetClipperSettings();
+                    setSettingsSavedToast(true);
+                    setTimeout(() => setSettingsSavedToast(false), 3000);
+                  }}
+                  className="text-xs font-mono text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  Restaurar padrões
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClutchFanfare();
+                    setSettingsSavedToast(true);
+                    setTimeout(() => setSettingsSavedToast(false), 3000);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold cursor-pointer"
+                  style={{ backgroundColor: customColor, color: '#09090b' }}
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  <span>Salvar Preferências</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
